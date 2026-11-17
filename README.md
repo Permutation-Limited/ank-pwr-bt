@@ -5,25 +5,33 @@ Bluetooth. No app or cloud account needed.
 
 ![Status page showing a SOLIX C2000 Gen 2 with main and expansion battery gauges and live power output](docs/status.png)
 
-## Run it
+## Use it
+
+Open **https://permutation-limited.github.io/ank-pwr-bt/** in Chrome or Edge
+(desktop or Android; Safari, iOS and Firefox don't support Web Bluetooth) and
+click **Connect**. Everything runs in your browser: there's no server, and
+your device's data never leaves your machine.
+
+The power station accepts one Bluetooth connection at a time, so close the
+Anker app on your phone (or turn off its Bluetooth) first. If the station asks
+you to approve the browser, short-press its power or IoT button.
+
+- **Status** (`#/`): battery level and power in and out, live.
+- **Debug** (`#/debug`): session details, raw telemetry tags, advertisements,
+  the GATT tree and a protocol log.
+
+## Develop
 
 You only need Bazel (via bazelisk). Bazel downloads Bun itself.
 
 ```bash
-bazel run //web:serve
+bazel run //web:serve          # http://localhost:8080
+bazel test //...               # protocol, device model and layering tests
+bazel build //web:dist         # deployable site as bazel-bin/web/dist.tar
 ```
 
-Open http://localhost:8080 in Chrome and click **Connect**. The power station
-accepts one Bluetooth connection at a time, so close the Anker app on your phone
-(or turn off its Bluetooth) first. If the station asks you to approve the browser,
-short-press its power or IoT button.
-
-- **`/`**: battery level and power in and out, live.
-- **`/debug`**: session details, raw telemetry tags, advertisements, the GATT tree and a protocol log.
-
-```bash
-bazel test //web:solix_test   # protocol, device model and layering tests
-```
+Every push to `main` is tested, built and deployed to GitHub Pages by
+`.github/workflows/pages.yml`.
 
 ## How it works
 

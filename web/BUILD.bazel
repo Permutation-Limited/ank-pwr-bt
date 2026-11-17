@@ -43,6 +43,21 @@ filegroup(
     visibility = ["//visibility:public"],
 )
 
+# Deployable static site as a flat tarball (CI extracts it and uploads it to
+# GitHub Pages). .nojekyll stops Pages from post-processing the files.
+genrule(
+    name = "dist",
+    srcs = [":site"],
+    outs = ["dist.tar"],
+    cmd = " && ".join([
+        "out=$$PWD/$@",
+        "d=$$(mktemp -d)",
+        "for f in $(SRCS); do cp -L $$f $$d/; done",
+        "touch $$d/.nojekyll",
+        "(cd $$d && tar -cf $$out .)",
+    ]),
+)
+
 # `bazel run //web:serve` -> http://localhost:8080
 sh_binary(
     name = "serve",

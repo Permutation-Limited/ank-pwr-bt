@@ -5,7 +5,7 @@
 //   ble/       Web Bluetooth client built on protocol/. No DOM. ble/index.ts is its API.
 //   ui/        DOM rendering. Talks to ble/ only through ble/index.ts.
 //
-// Pages: "/" status (ui/status-page.ts), "/debug" diagnostics (ui/explorer-panel.ts,
+// Pages: "#/" status (ui/status-page.ts), "#/debug" diagnostics (ui/explorer-panel.ts,
 // ui/solix-panel.ts). One client is shared, so navigating keeps the connection.
 
 import { type OuterPreference, SolixClient, bluetoothEnvironment, onAvailabilityChanged, parseServiceUuid } from "./ble";

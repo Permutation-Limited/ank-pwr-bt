@@ -1,0 +1,71 @@
+# Test, build and deploy the static site to GitHub Pages on every push to main.
+# Bazel (via bazelisk, preinstalled on ubuntu runners as `bazel`) downloads the
+# pinned Bun itself; its repository and disk caches are kept between runs.
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  # Superseded PR builds can stop; never cut a Pages deploy off midway.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazelisk
+            ~/.cache/bazel-repo
+            ~/.cache/bazel-disk
+          key: bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'tools/**') }}-${{ github.sha }}
+          restore-keys: |
+            bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'tools/**') }}-
+            bazel-${{ runner.os }}-
+
+      - name: Test
+        run: >
+          bazel test //...
+          --repository_cache="$HOME/.cache/bazel-repo"
+          --disk_cache="$HOME/.cache/bazel-disk"
+          --test_output=errors
+
+      - name: Build site
+        run: |
+          bazel build //web:dist \
+            --repository_cache="$HOME/.cache/bazel-repo" \
+            --disk_cache="$HOME/.cache/bazel-disk"
+          mkdir -p _site
+          tar -xf bazel-bin/web/dist.tar -C _site
+          ls -la _site
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

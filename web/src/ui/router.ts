@@ -1,6 +1,7 @@
-// Client-side routing between views. One page load keeps one SolixClient, so
-// switching views never drops the Bluetooth connection. The dev server falls
-// back to index.html for unknown paths, so /debug works on reload too.
+// Client-side routing between views via the URL hash (#/, #/debug). Hash
+// routes need no server support, so the same build works on the dev server,
+// GitHub Pages (served from a /<repo>/ subpath) or any static host. One page
+// load keeps one SolixClient, so switching views never drops the connection.
 
 interface Route { view: string; title: string }
 
@@ -9,29 +10,30 @@ const ROUTES: Record<string, Route> = {
   "/debug": { view: "view-debug", title: "Power Station · Debug" },
 };
 
-function show(path: string) {
-  const key = ROUTES[path] ? path : "/";
+/** "#/debug" → "/debug"; anything unknown → "/". */
+const current = () => {
+  const path = location.hash.replace(/^#/, "") || "/";
+  return ROUTES[path] ? path : "/";
+};
+
+function show() {
+  const key = current();
   for (const [p, r] of Object.entries(ROUTES)) {
     const el = document.getElementById(r.view);
     if (el) el.hidden = p !== key;
   }
   document.title = ROUTES[key]!.title;
   document.querySelectorAll<HTMLAnchorElement>("header.site nav a[data-route]").forEach((a) => {
-    if (new URL(a.href).pathname === key) a.setAttribute("aria-current", "page");
+    if ((a.getAttribute("href") ?? "").replace(/^#/, "") === key) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
 }
 
 export function startRouter() {
-  document.addEventListener("click", (e) => {
-    const a = (e.target as Element | null)?.closest<HTMLAnchorElement>("a[data-route]");
-    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    const url = new URL(a.href);
-    if (url.origin !== location.origin) return;
-    e.preventDefault();
-    if (url.pathname !== location.pathname) history.pushState(null, "", url.pathname);
-    show(url.pathname);
-  });
-  addEventListener("popstate", () => show(location.pathname));
-  show(location.pathname);
+  // Old path-style links (/debug) from before hash routing still land right.
+  if (!location.hash && location.pathname.endsWith("/debug")) {
+    history.replaceState(null, "", location.pathname.replace(/debug$/, "") + "#/debug");
+  }
+  addEventListener("hashchange", show);
+  show();
 }
