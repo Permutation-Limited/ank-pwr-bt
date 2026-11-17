@@ -7,7 +7,7 @@
 // Values read plausibly but haven't been compared side by side with the app.
 
 import { type Params, paramInt } from "../packet";
-import type { DeviceModel, TelemetryField } from "./types";
+import type { DeviceModel, FieldRole, TelemetryField } from "./types";
 
 const NAMES = [/^SOLIX C1000X? Gen 2/, /^SOLIX C1000 Plus/, /^SOLIX C2000X? Gen 2/];
 const PRODUCT_TYPES = ["b118", "b119"]; // A1763, A1765 (C2000's not yet seen)
@@ -42,29 +42,29 @@ export const gen2: DeviceModel = {
 
   decodeTelemetry(cmd, p) {
     if (!TELEMETRY_CMDS.includes(cmd)) return [];
-    const rows: [string, string, number | string | undefined, string?][] = [
-      ["serial", "Serial number", ascii(p, 0xa2, 3, 20)],
-      ["part_number", "Part number", ascii(p, 0xa2, 22, 27)],
-      ["battery_percent", "Battery", paramInt(p, 0xa5, 3, 4), "%"],
+    const rows: [string, string, FieldRole, number | string | undefined, string?][] = [
+      ["serial", "Serial number", "info", ascii(p, 0xa2, 3, 20)],
+      ["part_number", "Part number", "info", ascii(p, 0xa2, 22, 27)],
+      ["battery_percent", "Battery", "battery", paramInt(p, 0xa5, 3, 4), "%"],
       // C1000 Gen 2's battery health byte (a5[4]) read 232 on a C2000; omitted.
-      ["temperature", "Temperature", paramInt(p, 0xa5, 1, 2, true), "°C"],
-      ["power_out", "Total output", paramInt(p, 0xa6, 1, 3), "W"],
-      ["ac_in", "AC input", paramInt(p, 0xa6, 3, 5), "W"],
-      ["ac_out", "AC output", paramInt(p, 0xa7, 2, 4), "W"],
-      ["ac_port", "AC port", port(paramInt(p, 0xa7, 1, 2))],
-      ["solar_in", "Solar input", paramInt(p, 0xa8, 2), "W"],
-      ["solar_port", "Solar port", inputPort(paramInt(p, 0xa8, 1, 2))],
-      ["usb_c1", "USB-C1", paramInt(p, 0xaa, 2), "W"],
-      ["usb_c2", "USB-C2", paramInt(p, 0xab, 2), "W"],
-      ["usb_c3", "USB-C3", paramInt(p, 0xac, 2), "W"],
-      ["usb_a1", "USB-A1", paramInt(p, 0xae, 2), "W"],
-      ["dc_out", "DC output", paramInt(p, 0xb2, 2), "W"],
-      ["dc_port", "DC port", port(paramInt(p, 0xb2, 1, 2))],
-      ["max_charge", "Max charge limit", paramInt(p, 0xd9, 4, 5), "%"],
-      ["min_discharge", "Min discharge limit", paramInt(p, 0xd9, 5, 6), "%"],
+      ["temperature", "Temperature", "temperature", paramInt(p, 0xa5, 1, 2, true), "°C"],
+      ["power_out", "Total output", "output_total", paramInt(p, 0xa6, 1, 3), "W"],
+      ["ac_in", "AC", "input", paramInt(p, 0xa6, 3, 5), "W"],
+      ["solar_in", "Solar", "input", paramInt(p, 0xa8, 2), "W"],
+      ["ac_out", "AC", "output", paramInt(p, 0xa7, 2, 4), "W"],
+      ["usb_c1", "USB-C1", "output", paramInt(p, 0xaa, 2), "W"],
+      ["usb_c2", "USB-C2", "output", paramInt(p, 0xab, 2), "W"],
+      ["usb_c3", "USB-C3", "output", paramInt(p, 0xac, 2), "W"],
+      ["usb_a1", "USB-A", "output", paramInt(p, 0xae, 2), "W"],
+      ["dc_out", "Car / DC", "output", paramInt(p, 0xb2, 2), "W"],
+      ["ac_port", "AC port", "port", port(paramInt(p, 0xa7, 1, 2))],
+      ["solar_port", "Solar port", "port", inputPort(paramInt(p, 0xa8, 1, 2))],
+      ["dc_port", "DC port", "port", port(paramInt(p, 0xb2, 1, 2))],
+      ["max_charge", "Max charge limit", "setting", paramInt(p, 0xd9, 4, 5), "%"],
+      ["min_discharge", "Min discharge limit", "setting", paramInt(p, 0xd9, 5, 6), "%"],
     ];
     return rows
-      .filter(([, , v]) => v !== undefined)
-      .map(([key, label, value, unit]): TelemetryField => ({ key, label, value: value!, unit }));
+      .filter(([, , , v]) => v !== undefined)
+      .map(([key, label, role, value, unit]): TelemetryField => ({ key, label, role, value: value!, unit }));
   },
 };

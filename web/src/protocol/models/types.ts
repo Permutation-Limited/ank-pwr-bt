@@ -14,12 +14,25 @@ export interface DeviceHints {
   partNumber?: string;
 }
 
+/**
+ * What a field means, so UIs can lay out any model's telemetry without
+ * knowing the model:
+ * - battery: state of charge (%)
+ * - input / output: power on one port (W)
+ * - input_total / output_total: power summed across ports (W)
+ * - temperature, port, setting, info: everything else
+ */
+export type FieldRole =
+  | "battery" | "input" | "output" | "input_total" | "output_total"
+  | "temperature" | "port" | "setting" | "info";
+
 /** One decoded telemetry value, ready to display. */
 export interface TelemetryField {
   key: string; // stable id, e.g. "battery_percent"
   label: string; // human label, e.g. "Battery"
   value: number | string;
   unit?: string;
+  role: FieldRole;
 }
 
 /** A session command: ``cmd`` includes flag bits (e.g. "4100"); tags are raw TLV values. */

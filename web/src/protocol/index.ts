@@ -10,5 +10,5 @@ export {
   type Announcement, CLIENT_ID, type SessionMessage, type SessionState, SolixSession,
 } from "./session";
 export {
-  type DeviceHints, type DeviceModel, MODELS, type ModelCommand, type TelemetryField, resolveModel,
+  type DeviceHints, type DeviceModel, type FieldRole, MODELS, type ModelCommand, type TelemetryField, resolveModel,
 } from "./models";

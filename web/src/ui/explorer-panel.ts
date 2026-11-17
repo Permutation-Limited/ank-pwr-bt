@@ -48,7 +48,6 @@ export class ExplorerPanel {
         ["watchingAdvertisements", String(c.watchingAdvertisements ?? "n/a")],
       ]);
     }
-    $<HTMLButtonElement>("disconnect").disabled = !c.connected;
     $<HTMLButtonElement>("rescan").disabled = !c.connected;
     $<HTMLButtonElement>("reconnect").disabled = c.connected || !c.device;
   }

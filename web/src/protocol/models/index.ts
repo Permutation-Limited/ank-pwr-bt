@@ -5,7 +5,7 @@ import { gen2 } from "./gen2";
 import { generic } from "./generic";
 import type { DeviceHints, DeviceModel } from "./types";
 
-export type { DeviceHints, DeviceModel, ModelCommand, TelemetryField } from "./types";
+export type { DeviceHints, DeviceModel, FieldRole, ModelCommand, TelemetryField } from "./types";
 
 export const MODELS: readonly DeviceModel[] = [gen2, generic];
 

@@ -3,84 +3,149 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Solix BLE Explorer</title>
-  <link rel="stylesheet" href="style.css">
+  <title>SOLIX Status</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header>
-    <h1>Solix BLE Explorer</h1>
-    <span id="availability" class="pill">checking…</span>
+  <header class="site">
+    <a class="brand" href="/" data-route>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+      SOLIX
+    </a>
+    <nav>
+      <a href="/" data-route>Status</a>
+      <a href="/debug" data-route>Debug</a>
+    </nav>
+    <div class="spacer"></div>
+    <span id="connPill" class="pill">Not connected</span>
+    <button id="connect" class="primary">Connect</button>
+    <button id="disconnect" disabled>Disconnect</button>
   </header>
 
-  <section class="controls">
-    <div class="row">
-      <button id="connect" class="primary">Connect to SOLIX</button>
-      <button id="reconnect" disabled>Reconnect</button>
-      <button id="disconnect" disabled>Disconnect</button>
-      <button id="rescan" disabled>Read GATT tree</button>
-    </div>
-    <details>
-      <summary>Options</summary>
-      <label><input type="checkbox" id="acceptAll"> Show all nearby devices, not just Anker (acceptAllDevices)</label>
-      <label>Handshake variant
-        <select id="outer">
-          <option value="auto" selected>Auto (advertisement hint, else plain, falling back to encrypted)</option>
-          <option value="plain">Plain (clear handshake, AES-CBC session)</option>
-          <option value="encrypted">Encrypted (AES-GCM handshake and session)</option>
-        </select>
-      </label>
-      <label><input type="checkbox" id="autoSubscribe" checked> Send the device model's start-up commands (e.g. telemetry subscribe) once authorized</label>
-      <label><input type="checkbox" id="autoGatt"> Read the full GATT tree after the handshake</label>
-      <label>Extra optional service UUIDs (one per line; Web Bluetooth only exposes services listed here)
-        <textarea id="extraServices" rows="3" spellcheck="false"></textarea>
-      </label>
-      <label>Optional manufacturer IDs for advertisement data (comma-separated, decimal or 0x hex)
-        <input id="manufacturerIds" placeholder="e.g. 0x004c">
-      </label>
-    </details>
-  </section>
-
-  <main>
-    <section class="wide">
-      <h2>SOLIX <span id="solixState" class="pill">not started</span>
-        <button id="solixSubscribe" class="small" disabled hidden>model commands</button></h2>
-      <div class="cols">
-        <div>
-          <h3>Session</h3>
-          <dl id="solixInfo" class="kv"><dt>—</dt><dd>Not connected</dd></dl>
-        </div>
-        <div>
-          <h3>Telemetry <span class="hint">(decoded by the device model)</span></h3>
-          <dl id="solixDecoded" class="kv"><dt>—</dt><dd>No telemetry yet</dd></dl>
-        </div>
+  <!-- ============================================================ Status -->
+  <main id="view-status" class="status-view">
+    <section id="statusEmpty" class="empty">
+      <div class="empty-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="40" height="40"><path fill="currentColor" d="M15.67 4H14V2h-4v2H8.33A1.33 1.33 0 0 0 7 5.33v15.34C7 21.4 7.6 22 8.33 22h7.34c.73 0 1.33-.6 1.33-1.33V5.33C17 4.6 16.4 4 15.67 4zM13 18h-2v-2h2v2zm0-4h-2V9h2v5z"/></svg>
       </div>
-      <h3>Raw telemetry tags <span class="hint">(changed values highlighted)</span></h3>
-      <p id="solixRawHint" class="hint">Telemetry frames appear here once the session is authorized.</p>
-      <div id="solixRaw" class="rawgrid"></div>
+      <h1>Connect your power station</h1>
+      <p>Pair a SOLIX power station over Bluetooth to see its battery and power flow live.
+        Close the Anker app on your phone first: the station accepts one Bluetooth connection at a time.</p>
+      <button class="primary big" data-action="connect">Connect</button>
+      <p id="statusWaiting" class="waiting" hidden></p>
     </section>
-    <section>
-      <h2>Bluetooth API</h2>
-      <dl id="api" class="kv"></dl>
-    </section>
-    <section>
-      <h2>Device</h2>
-      <dl id="device" class="kv"><dt>—</dt><dd>Not connected</dd></dl>
-    </section>
-    <section>
-      <h2>Advertisements</h2>
-      <p class="hint">Needs <code>chrome://flags/#enable-experimental-web-platform-features</code>.</p>
-      <dl id="adv" class="kv"><dt>—</dt><dd>No advertisement received</dd></dl>
-    </section>
-    <section class="wide">
-      <h2>GATT services</h2>
-      <div id="gatt"><p class="hint">Connect to a device to enumerate services.</p></div>
-    </section>
-    <section class="wide">
-      <h2>Log <button id="clearLog" class="small">clear</button></h2>
-      <pre id="log"></pre>
+
+    <section id="statusLive" class="live" hidden>
+      <div class="device-line">
+        <span id="statusDevice" class="device-name"></span>
+        <span id="statusMeta" class="meta"></span>
+      </div>
+
+      <section class="battery-card">
+        <div class="ring" role="img" id="batteryRing">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="track" cx="60" cy="60" r="52"/>
+            <circle class="level" id="batteryArc" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="0 100"/>
+          </svg>
+          <div class="ring-label">
+            <span id="batteryPct" class="pct">—</span>
+            <span class="pct-label">battery</span>
+          </div>
+        </div>
+        <div class="battery-side">
+          <div id="flowState" class="flow-state">—</div>
+          <div class="net"><span id="netWatts">—</span><span class="net-label">net power</span></div>
+          <div class="totals">
+            <div><span class="dot in"></span>In <strong id="totalIn">—</strong></div>
+            <div><span class="dot out"></span>Out <strong id="totalOut">—</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="flows">
+        <section class="flow-card in">
+          <header><h2>Input</h2><span id="inTotalBig" class="flow-total">—</span></header>
+          <ul id="inputs" class="ports"></ul>
+        </section>
+        <section class="flow-card out">
+          <header><h2>Output</h2><span id="outTotalBig" class="flow-total">—</span></header>
+          <ul id="outputs" class="ports"></ul>
+        </section>
+      </div>
     </section>
   </main>
 
-  <script type="module" src="app.js"></script>
+  <!-- ============================================================ Debug -->
+  <div id="view-debug" hidden>
+    <section class="controls">
+      <div class="row">
+        <span id="availability" class="pill">checking…</span>
+        <button id="reconnect" disabled>Reconnect</button>
+        <button id="rescan" disabled>Read GATT tree</button>
+      </div>
+      <details>
+        <summary>Options</summary>
+        <label><input type="checkbox" id="acceptAll"> Show all nearby devices, not just Anker (acceptAllDevices)</label>
+        <label>Handshake variant
+          <select id="outer">
+            <option value="auto" selected>Auto (advertisement hint, else model preference, else plain with encrypted fallback)</option>
+            <option value="plain">Plain (clear handshake, AES-CBC session)</option>
+            <option value="encrypted">Encrypted (AES-GCM handshake and session)</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="autoSubscribe" checked> Send the device model's start-up commands (e.g. telemetry subscribe) once authorized</label>
+        <label><input type="checkbox" id="autoGatt"> Read the full GATT tree after the handshake</label>
+        <label>Extra optional service UUIDs (one per line; Web Bluetooth only exposes services listed here)
+          <textarea id="extraServices" rows="3" spellcheck="false"></textarea>
+        </label>
+        <label>Optional manufacturer IDs for advertisement data (comma-separated, decimal or 0x hex)
+          <input id="manufacturerIds" placeholder="e.g. 0x004c">
+        </label>
+      </details>
+    </section>
+
+    <main class="debug-grid">
+      <section class="wide">
+        <h2>SOLIX <span id="solixState" class="pill">not started</span>
+          <button id="solixSubscribe" class="small" disabled hidden>model commands</button></h2>
+        <div class="cols">
+          <div>
+            <h3>Session</h3>
+            <dl id="solixInfo" class="kv"><dt>—</dt><dd>Not connected</dd></dl>
+          </div>
+          <div>
+            <h3>Telemetry <span class="hint">(decoded by the device model)</span></h3>
+            <dl id="solixDecoded" class="kv"><dt>—</dt><dd>No telemetry yet</dd></dl>
+          </div>
+        </div>
+        <h3>Raw telemetry tags <span class="hint">(changed values highlighted)</span></h3>
+        <p id="solixRawHint" class="hint">Telemetry frames appear here once the session is authorized.</p>
+        <div id="solixRaw" class="rawgrid"></div>
+      </section>
+      <section>
+        <h2>Bluetooth API</h2>
+        <dl id="api" class="kv"></dl>
+      </section>
+      <section>
+        <h2>Device</h2>
+        <dl id="device" class="kv"><dt>—</dt><dd>Not connected</dd></dl>
+      </section>
+      <section>
+        <h2>Advertisements</h2>
+        <p class="hint">Needs <code>chrome://flags/#enable-experimental-web-platform-features</code>.</p>
+        <dl id="adv" class="kv"><dt>—</dt><dd>No advertisement received</dd></dl>
+      </section>
+      <section class="wide">
+        <h2>GATT services</h2>
+        <div id="gatt"><p class="hint">Connect to a device to enumerate services.</p></div>
+      </section>
+      <section class="wide">
+        <h2>Log <button id="clearLog" class="small">clear</button></h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
