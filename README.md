@@ -28,7 +28,21 @@ bazel test //web:solix_test
 ```
 
 If the handshake stalls on the device's registration step (`x827` status `09`),
-press the power station's IoT/Bluetooth button to approve the browser.
+the station is waiting for you to approve the browser within 180 s. On the C2000
+Gen 2 the only button is the main power button; a short press approves it.
+
+### Tested: SOLIX C2000 Gen 2 (A1783)
+
+- **Discovery:** it advertises as "SOLIX C2000 Gen 2". Chrome only finds it
+  while the phone isn't holding the Bluetooth connection, so close the Anker app
+  or turn off the phone's Bluetooth first.
+- **GATT service:** the command and telemetry characteristics live in
+  service `8c850001-0302-41c5-b46e-cf057c562025`, not `0xff09`. SolixBLE never
+  needed the service UUID because Bleak looks characteristics up directly.
+- **Handshake:** the station drops the plain handshake and accepts the
+  encrypted (AES-GCM) one. The firmware reports ESP32 / 0.0.0.3, MTU 253.
+- **Telemetry:** after the `4100` subscribe it streams `c900`, then `c421`
+  every ~3 s, with the C1000 Gen 2 tag layout.
 
 ## Build and run
 

@@ -7,8 +7,14 @@
 const BASE = "-0000-1000-8000-00805f9b34fb";
 const short = (n: number) => n.toString(16).padStart(8, "0") + BASE;
 
-/** Primary SOLIX service: carries ``ff09`` frames and a negotiated session. */
+/**
+ * SolixBLE's identifying UUID for the ``ff09`` transport. Bleak finds the
+ * characteristics by UUID alone, so SolixBLE never needed the GATT service
+ * that actually contains them. Web Bluetooth does.
+ */
 export const SOLIX_SERVICE = short(0xff09);
+/** Likely GATT container of the command/telemetry characteristics (same base UUID). */
+export const SOLIX_SERVICE_8C85 = "8c850001-0302-41c5-b46e-cf057c562025";
 /** Write characteristic for commands and negotiation requests. */
 export const SOLIX_COMMAND = "8c850002-0302-41c5-b46e-cf057c562025";
 /** Notify characteristic for telemetry and negotiation replies. */
@@ -24,12 +30,22 @@ export const ANKER_COMPANY_ID = 0xffff;
 
 export const SOLIX_SERVICES = [SOLIX_SERVICE, SOLIX_LEGACY_SERVICE, SOLIX_2215_SERVICE];
 
+/** Services to search for the SOLIX command/telemetry characteristics. */
+export const SOLIX_GATT_CANDIDATES = [SOLIX_SERVICE_8C85, SOLIX_SERVICE, "22150001-4002-81c5-b46e-cf057c562025", SOLIX_2215_SERVICE];
+
 const SERVICES: Record<string, string> = {
   [short(0x1800)]: "Generic Access",
   [short(0x1801)]: "Generic Attribute",
   [short(0x180a)]: "Device Information",
   [short(0x180f)]: "Battery Service",
-  [SOLIX_SERVICE]: "Anker SOLIX",
+  [SOLIX_SERVICE]: "Anker SOLIX (ff09)",
+  [SOLIX_SERVICE_8C85]: "Anker SOLIX (8c85)",
+  "22150001-4002-81c5-b46e-cf057c562025": "Anker (2215 base)",
+  [short(0xfff0)]: "Vendor (0xFFF0)",
+  [short(0xffe0)]: "Vendor (0xFFE0)",
+  [short(0xff00)]: "Vendor (0xFF00)",
+  [short(0xae00)]: "Vendor (0xAE00)",
+  [short(0xfe95)]: "Vendor (0xFE95)",
   [SOLIX_LEGACY_SERVICE]: "Anker SOLIX (legacy transport)",
   [SOLIX_2215_SERVICE]: "Anker (2215 transport)",
 };

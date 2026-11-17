@@ -5,7 +5,7 @@ import type { OuterName } from "./solix/crypto";
 import { CAPABILITY_ENCRYPTED_ECDH, type AnkerRecord } from "./solix/advertisement";
 import { type SessionMessage, type SessionState, SolixSession } from "./solix/session";
 import { SUBSCRIBE_CMD, SUBSCRIBE_TAGS, decodeGen2 } from "./solix/telemetry";
-import { SOLIX_COMMAND, SOLIX_SERVICE, SOLIX_TELEMETRY } from "./uuids";
+import { SOLIX_COMMAND, SOLIX_GATT_CANDIDATES, SOLIX_TELEMETRY } from "./uuids";
 
 const OPEN_RETRY_MS = 8000;
 const MAX_OPENS = 3;
@@ -47,16 +47,25 @@ export class SolixController {
   /** Returns false if the device has no SOLIX ff09 service. */
   async attach(device: BluetoothDevice): Promise<boolean> {
     this.stop();
-    let service: BluetoothRemoteGATTService;
-    try {
-      service = await device.gatt!.getPrimaryService(SOLIX_SERVICE);
-    } catch (e) {
-      this.deps.log("no SOLIX 0xff09 service on this device; skipping the SOLIX handshake");
+    let found: [BluetoothRemoteGATTCharacteristic, BluetoothRemoteGATTCharacteristic] | null = null;
+    for (const uuid of SOLIX_GATT_CANDIDATES) {
+      try {
+        const service = await device.gatt!.getPrimaryService(uuid);
+        const write = await service.getCharacteristic(SOLIX_COMMAND);
+        const notify = await service.getCharacteristic(SOLIX_TELEMETRY);
+        found = [write, notify];
+        this.deps.log(`SOLIX characteristics found in service ${uuid}`);
+        break;
+      } catch (e) {
+        this.deps.log(`service ${uuid}: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    if (!found) {
+      this.deps.log("no SOLIX command/telemetry characteristics found; skipping the SOLIX handshake", "err");
       this.render();
       return false;
     }
-    this.write = await service.getCharacteristic(SOLIX_COMMAND);
-    this.notify = await service.getCharacteristic(SOLIX_TELEMETRY);
+    [this.write, this.notify] = found;
     this.notify.addEventListener("characteristicvaluechanged", this.onValue);
     await this.notify.startNotifications();
     this.deps.log("subscribed to SOLIX telemetry characteristic");
