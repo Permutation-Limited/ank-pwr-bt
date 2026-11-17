@@ -1,13 +1,14 @@
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
-# Protocol tests against fixtures recorded by SolixBLE.
+# Protocol tests (SolixBLE fixtures + live C2000 capture) and layering rules.
 sh_test(
     name = "solix_test",
     srcs = ["//tools/bun:test.sh"],
     args = [
         "$(rlocationpath @bun//:bun)",
-        "$(rlocationpath src/solix/solix.test.ts)",
+        "$(rlocationpath src/protocol/solix.test.ts)",
+        "$(rlocationpath src/architecture.test.ts)",
     ],
     data = glob(["src/**/*.ts"]) + ["@bun//:bun"],
 )

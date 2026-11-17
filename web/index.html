@@ -29,7 +29,7 @@
           <option value="encrypted">Encrypted (AES-GCM handshake and session)</option>
         </select>
       </label>
-      <label><input type="checkbox" id="autoSubscribe" checked> Send the telemetry subscribe command (4100) once authorized</label>
+      <label><input type="checkbox" id="autoSubscribe" checked> Send the device model's start-up commands (e.g. telemetry subscribe) once authorized</label>
       <label><input type="checkbox" id="autoGatt"> Read the full GATT tree after the handshake</label>
       <label>Extra optional service UUIDs (one per line; Web Bluetooth only exposes services listed here)
         <textarea id="extraServices" rows="3" spellcheck="false"></textarea>
@@ -43,14 +43,14 @@
   <main>
     <section class="wide">
       <h2>SOLIX <span id="solixState" class="pill">not started</span>
-        <button id="solixSubscribe" class="small" disabled>send subscribe</button></h2>
+        <button id="solixSubscribe" class="small" disabled hidden>model commands</button></h2>
       <div class="cols">
         <div>
           <h3>Session</h3>
           <dl id="solixInfo" class="kv"><dt>—</dt><dd>Not connected</dd></dl>
         </div>
         <div>
-          <h3>Telemetry (C1000 Gen 2 field map, unverified on C2000)</h3>
+          <h3>Telemetry <span class="hint">(decoded by the device model)</span></h3>
           <dl id="solixDecoded" class="kv"><dt>—</dt><dd>No telemetry yet</dd></dl>
         </div>
       </div>

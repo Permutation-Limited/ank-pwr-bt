@@ -8,6 +8,7 @@ import { fromHex, hex } from "./bytes";
 import { STATIC_KEYS, cbcDecrypt, deriveSessionKeys, gcmDecrypt } from "./crypto";
 import { Reassembler, buildPacket, parseCommand, parsePacket, parseParams } from "./packet";
 import { CLIENT_ID, SolixSession } from "./session";
+import { resolveModel } from "./models";
 
 // --- fixtures (SolixBLE tests/const.py) -----------------------------------
 
@@ -156,5 +157,39 @@ describe("session", () => {
     expect(new TextDecoder().decode(params.get(0xa2)!)).toBe(CLIENT_ID);
     expect(new TextDecoder().decode(params.get(0xa5)!)).toBe("GMT0BST,M3.5.0/1,M10.5.0");
     expect(session.state).toBe("negotiating");
+  });
+});
+
+describe("device models", () => {
+  test("resolves models from name, product type and part number", () => {
+    expect(resolveModel({ name: "SOLIX C2000 Gen 2" }).id).toBe("solix-gen2");
+    expect(resolveModel({ name: "SOLIX C1000 Gen 2" }).id).toBe("solix-gen2");
+    expect(resolveModel({ productType: "b118" }).id).toBe("solix-gen2");
+    expect(resolveModel({ partNumber: "A1783" }).id).toBe("solix-gen2");
+    expect(resolveModel({ name: "Anker SOLIX F3800" }).id).toBe("solix-generic");
+    expect(resolveModel({}).id).toBe("solix-generic");
+  });
+
+  test("gen2 decodes telemetry captured live from a C2000 Gen 2 (c421)", () => {
+    const params = new Map<number, Uint8Array>([
+      [0xa2, fromHex("062011415858585858585858303030303030303100054131373833060102010001")],
+      [0xa5, fromHex("041c0064e800")],
+      [0xa6, fromHex("042600000000007a0264")],
+      [0xa7, fromHex("04011f00000000")],
+      [0xa8, fromHex("04010000")],
+      [0xaa, fromHex("04010100")],
+      [0xab, fromHex("04010600")],
+      [0xb2, fromHex("04000000")],
+      [0xd9, fromHex("040000066401000000003eeadc694ef8dc690000000000000000")],
+    ]);
+    const model = resolveModel({ name: "SOLIX C2000 Gen 2" });
+    const f = Object.fromEntries(model.decodeTelemetry("c421", params).map((x) => [x.key, x.value]));
+    expect(f).toMatchObject({
+      serial: "AXXXXXXXX00000001", part_number: "A1783", battery_percent: 100, temperature: 28,
+      power_out: 38, ac_out: 31, ac_port: "output", solar_port: "input", usb_c1: 1, usb_c2: 6,
+      dc_port: "not connected", max_charge: 100,
+    });
+    expect(model.partNumber!(params)).toBe("A1783");
+    expect(model.decodeTelemetry("0300", params)).toEqual([]);
   });
 });

@@ -11,8 +11,8 @@ AES-CBC or AES-GCM), subscribes to telemetry and shows:
 
 - **Session details:** serial number, MAC, firmware, MTU and the methods the
   device announced.
-- **Decoded telemetry:** values decoded with the C1000 Gen 2 field map. These
-  are guesses for the C2000.
+- **Decoded telemetry:** values decoded by the matching device model (see
+  *Device models* below). Unknown SOLIX devices still negotiate and show raw tags.
 - **Raw telemetry tags:** every tag the device sends, with changed values
   highlighted, so you can map new fields against the Anker app.
 
@@ -20,8 +20,9 @@ You can also read the generic BLE details: advertisements, plus a GATT tree
 (click **Read GATT tree**, or enable it in Options).
 
 The protocol is ported from [SolixBLE](https://github.com/flip-dots/SolixBLE).
-`web/src/solix/solix.test.ts` replays SolixBLE's recorded C1000 handshake and
-checks that the port matches it byte for byte:
+`web/src/protocol/solix.test.ts` replays SolixBLE's recorded C1000 handshake
+byte for byte and decodes telemetry captured from a C2000 Gen 2;
+`web/src/architecture.test.ts` enforces the layering below:
 
 ```bash
 bazel test //web:solix_test
@@ -62,33 +63,52 @@ Only build the static site (output goes to `bazel-bin/web/`):
 bazel build //web:site
 ```
 
-## Layout
+## Architecture
+
+Three layers, each depending only on the one below. `web/src/architecture.test.ts` enforces this:
+
+| Layer | Path | Rules |
+| --- | --- | --- |
+| Protocol | `web/src/protocol/` | SOLIX framing, crypto, negotiation, device models. Pure TS + WebCrypto: no DOM, no Web Bluetooth. Public API: `protocol/index.ts`. |
+| BLE client | `web/src/ble/` | `SolixClient`: device picker, GATT connection, handshake retries and fallback, model resolution. Emits typed events (`log`, `connection`, `session`, `telemetry`, `advertisement`, `settled`). No DOM. Public API: `ble/index.ts`. |
+| UI | `web/src/ui/`, `web/src/main.ts` | Panels render client events and call client methods. They import only `ble/index.ts`. |
+
+### Device models
+
+Everything model-specific sits behind `DeviceModel` (`protocol/models/types.ts`):
+how to recognize the device (advertised name, Anker product type, part number
+from telemetry), its preferred handshake, the commands to send once
+authorized, and its telemetry decoder. `resolveModel()` picks the first model
+that matches. `generic` matches everything else and shows raw tags only.
+
+| Model | File | Covers |
+| --- | --- | --- |
+| `solix-gen2` | `protocol/models/gen2.ts` | C1000 / C1000X Gen 2, C1000 Plus, C2000 Gen 2 |
+| `solix-generic` | `protocol/models/generic.ts` | Any other SOLIX device (raw tags only) |
+
+To add a device, write a `DeviceModel` and list it in `protocol/models/index.ts`
+ahead of `generic`. SolixBLE's `devices/*.py` field maps port over directly.
+
+### Other paths
 
 | Path | Purpose |
 | --- | --- |
 | `MODULE.bazel` | Bzlmod deps: `rules_shell`, plus the Bun download extension |
-| `tools/bun/` | Bun repository rule, static file server (`serve.ts`) and its launcher |
-| `web/BUILD.bazel` | `app_js` (bun build), `site` filegroup, `serve` runner |
-| `web/src/main.ts` | UI, device picker filter, generic GATT explorer |
-| `web/src/solix-ui.ts` | Connects a SOLIX session to the GATT characteristics and renders it |
-| `web/src/solix/packet.ts` | `ff09` frames, TLV tags, fragment reassembly |
-| `web/src/solix/crypto.ts` | ECDH and AES-CBC/GCM on WebCrypto |
-| `web/src/solix/session.ts` | Negotiation state machine and session commands |
-| `web/src/solix/telemetry.ts` | Telemetry field map (C1000 Gen 2, unverified on C2000) |
-| `web/src/solix/advertisement.ts` | Anker manufacturer advertisement record |
-| `web/src/uuids.ts` | GATT UUIDs and the `optionalServices` list |
-| `web/src/format.ts` | Byte-buffer formatting helpers |
+| `tools/bun/` | Bun repository rule, static file server, and the serve and test launchers |
+| `web/BUILD.bazel` | `app_js` (bun build), `site`, `serve`, `solix_test` |
+| `web/src/ble/uuids.ts` | GATT UUIDs and the `optionalServices` list |
 
 ## Web Bluetooth notes
 
 - A page can only enumerate GATT services that were listed in
   `optionalServices` when it called `requestDevice()`. The defaults live in
-  `web/src/uuids.ts`. You can add more under **Request options** before you connect.
+  `web/src/ble/uuids.ts`. You can add more under **Options** before you connect.
 - Manufacturer data in advertisements only shows up for company IDs listed in
   `optionalManufacturerData`.
 - `watchAdvertisements()` needs
   `chrome://flags/#enable-experimental-web-platform-features`.
 - `getDevices()` (reconnecting to previously permitted devices) needs
   `chrome://flags/#enable-web-bluetooth-new-permissions-backend`.
-- The SOLIX service is `0xff09`. It contains the command characteristic
-  `8c850002-…` (write) and the telemetry characteristic `8c850003-…` (notify).
+- The command characteristic `8c850002-…` (write) and the telemetry
+  characteristic `8c850003-…` (notify) live in service `8c850001-…`. `0xff09`
+  is only an identifying UUID.

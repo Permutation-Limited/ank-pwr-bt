@@ -1,12 +1,11 @@
-// Helpers to render raw BLE byte buffers in a few useful ways.
+// Display formatting for raw byte values.
 
-export function toHex(view: DataView): string {
-  const out: string[] = [];
-  for (let i = 0; i < view.byteLength; i++) out.push(view.getUint8(i).toString(16).padStart(2, "0"));
-  return out.join(" ");
+export function toHex(view: DataView | Uint8Array): string {
+  const b = view instanceof Uint8Array ? view : new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join(" ");
 }
 
-export function toPrintable(view: DataView): string | null {
+function toPrintable(view: DataView): string | null {
   const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
   if (bytes.length === 0) return null;
   try {
@@ -27,16 +26,4 @@ export function describeValue(view: DataView): string {
   if (n === 2) lines.push(`u16le: ${view.getUint16(0, true)}  i16le: ${view.getInt16(0, true)}`);
   if (n === 4) lines.push(`u32le: ${view.getUint32(0, true)}  i32le: ${view.getInt32(0, true)}  f32le: ${view.getFloat32(0, true)}`);
   return lines.join("\n");
-}
-
-export function propsList(p: BluetoothCharacteristicProperties): string[] {
-  const keys: (keyof BluetoothCharacteristicProperties)[] = [
-    "broadcast", "read", "writeWithoutResponse", "write", "notify", "indicate",
-    "authenticatedSignedWrites", "reliableWrite", "writableAuxiliaries",
-  ];
-  return keys.filter((k) => p[k]);
-}
-
-export function errMsg(e: unknown): string {
-  return e instanceof Error ? `${e.name}: ${e.message}` : String(e);
 }
