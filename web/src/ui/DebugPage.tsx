@@ -90,7 +90,8 @@ function Controls() {
 
 /** Ports are short ("AC") on the status page; in this flat list say which side. */
 const fieldLabel = (f: TelemetryField) =>
-  f.role === "input" ? `${f.label} in` : f.role === "output" ? `${f.label} out` : f.label;
+  f.role === "input" ? `${f.label} in` : f.role === "output" ? `${f.label} out`
+  : f.role === "time_remaining" ? `${f.label} (to empty or full)` : f.label;
 
 function SolixSection() {
   const store = useStore();

@@ -2,6 +2,7 @@
 // their role, so it works for any device model.
 
 import BatteryIcon from "@mui/icons-material/BatteryAlert";
+import ScheduleIcon from "@mui/icons-material/Schedule";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -10,6 +11,7 @@ import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import type { TelemetryField } from "../ble";
+import { formatHours } from "./format";
 import { Gauge } from "./Gauge";
 import { useAppState } from "./store";
 
@@ -35,6 +37,13 @@ export function StatusPage() {
   const stateText = state === "charging" ? (allFull ? "Full, on input power" : "Charging")
     : state === "discharging" ? "Discharging" : "Idle";
   const stateColor = state === "charging" ? "flow.in" : state === "discharging" ? "flow.out" : "text.secondary";
+  // The station's estimate follows net power: time to empty while draining,
+  // time to full while charging. Nothing to count down when idle or full.
+  const hours = num(fields.find((f) => f.role === "time_remaining"));
+  const remaining = hours === undefined || hours <= 0 ? null
+    : state === "discharging" ? `≈ ${formatHours(hours)} until empty`
+    : state === "charging" && !allFull ? `≈ ${formatHours(hours)} until full`
+    : null;
 
   return (
     <Stack spacing={2}>
@@ -64,6 +73,13 @@ export function StatusPage() {
               <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: "currentColor" }} />
               <Typography sx={{ fontWeight: 600, fontSize: 15 }}>{stateText}</Typography>
             </Stack>
+            {remaining && (
+              <Stack direction="row" spacing={0.75} sx={{ alignItems: "center", color: "text.secondary", mt: -0.75,
+                justifyContent: { xs: "center", md: "flex-start" } }}>
+                <ScheduleIcon sx={{ fontSize: 16 }} />
+                <Typography variant="body2" sx={{ fontVariantNumeric: "tabular-nums" }}>{remaining}</Typography>
+              </Stack>
+            )}
             <Box>
               <Typography sx={{ fontSize: 34, fontWeight: 700, fontVariantNumeric: "tabular-nums", lineHeight: 1.2 }}>
                 {net > 0 ? "+" : net < 0 ? "−" : ""}{watts(Math.abs(net))}
