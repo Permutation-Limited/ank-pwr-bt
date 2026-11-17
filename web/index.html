@@ -42,16 +42,7 @@
       </div>
 
       <section class="battery-card">
-        <div class="ring" role="img" id="batteryRing">
-          <svg viewBox="0 0 120 120" aria-hidden="true">
-            <circle class="track" cx="60" cy="60" r="52"/>
-            <circle class="level" id="batteryArc" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="0 100"/>
-          </svg>
-          <div class="ring-label">
-            <span id="batteryPct" class="pct">—</span>
-            <span class="pct-label">battery</span>
-          </div>
-        </div>
+        <div id="gauges" class="gauges"></div>
         <div class="battery-side">
           <div id="flowState" class="flow-state">—</div>
           <div class="net"><span id="netWatts">—</span><span class="net-label">net power</span></div>

@@ -8,6 +8,31 @@ const num = (f?: TelemetryField) => (f && typeof f.value === "number" ? f.value 
 const sum = (fs: TelemetryField[]) => fs.reduce((n, f) => n + (num(f) ?? 0), 0);
 const watts = (n: number | undefined) => (n === undefined ? "—" : `${Math.round(n)} W`);
 
+const SVG = "http://www.w3.org/2000/svg";
+
+/** A ring gauge: track + level arc (pathLength 100, so dasharray = percent) + centered label. */
+function gauge(key: string): HTMLElement {
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("viewBox", "0 0 120 120");
+  svg.setAttribute("aria-hidden", "true");
+  for (const cls of ["track", "level"]) {
+    const c = document.createElementNS(SVG, "circle");
+    c.setAttribute("class", cls);
+    c.setAttribute("cx", "60");
+    c.setAttribute("cy", "60");
+    c.setAttribute("r", "52");
+    if (cls === "level") {
+      c.setAttribute("pathLength", "100");
+      c.setAttribute("stroke-dasharray", "0 100");
+    }
+    svg.append(c);
+  }
+  const el = h("div", { class: "ring", role: "img" },
+    svg, h("div", { class: "ring-label" }, h("span", { class: "pct" }, "—"), h("span", { class: "pct-label" })));
+  el.dataset.key = key;
+  return el;
+}
+
 export class StatusPage {
   private conn: ConnectionSnapshot = { device: null, connected: false };
   private session: SessionSnapshot | null = null;
@@ -40,7 +65,6 @@ export class StatusPage {
     const outputs = fields.filter((f) => f.role === "output");
     const totalIn = num(fields.find((f) => f.role === "input_total")) ?? sum(inputs);
     const totalOut = num(fields.find((f) => f.role === "output_total")) ?? sum(outputs);
-    const pct = Math.max(0, Math.min(100, num(battery) ?? 0));
     const temp = fields.find((f) => f.role === "temperature");
 
     $("statusDevice").textContent = this.conn.device?.name ?? this.session?.model.name ?? "Power station";
@@ -50,19 +74,17 @@ export class StatusPage {
       `updated ${t.at.toLocaleTimeString()}`,
     ].filter(Boolean).join(" · ");
 
-    // Battery ring
-    const card = $("batteryRing").closest<HTMLElement>(".battery-card")!;
-    card.dataset.level = pct <= 20 ? "low" : pct <= 50 ? "mid" : "high";
-    $("batteryArc").setAttribute("stroke-dasharray", `${pct} 100`);
-    $("batteryRing").setAttribute("aria-label", `Battery ${pct} percent`);
-    $("batteryPct").replaceChildren(String(Math.round(pct)), h("small", {}, "%"));
+    // One gauge per battery: the main pack, then any expansion packs.
+    const packs = [battery, ...fields.filter((f) => f.role === "expansion_battery")];
+    this.renderGauges(packs);
+    const allFull = packs.every((f) => (num(f) ?? 0) >= 100);
 
     // Flow summary
     const net = totalIn - totalOut;
     const flow = $("flowState");
     const state = totalIn > totalOut && totalIn > 0 ? "charging" : totalOut > totalIn ? "discharging" : "idle";
     flow.dataset.state = state;
-    flow.textContent = state === "charging" ? (pct >= 100 ? "Full, on input power" : "Charging")
+    flow.textContent = state === "charging" ? (allFull ? "Full, on input power" : "Charging")
       : state === "discharging" ? "Discharging" : "Idle";
     $("netWatts").textContent = `${net > 0 ? "+" : net < 0 ? "−" : ""}${Math.abs(Math.round(net))} W`;
     $("totalIn").textContent = watts(totalIn);
@@ -72,6 +94,35 @@ export class StatusPage {
 
     this.renderPorts($("inputs"), inputs, totalIn, "No inputs reported");
     this.renderPorts($("outputs"), outputs, totalOut, "No outputs reported");
+  }
+
+  /**
+   * Gauges are keyed by field and reused across readings so the arcs animate.
+   * With one pack the gauge reads "battery"; with several, "main" / "expansion".
+   */
+  private renderGauges(packs: TelemetryField[]) {
+    const root = $("gauges");
+    const multi = packs.length > 1;
+    root.classList.toggle("multi", multi);
+    const keep = new Set(packs.map((f) => f.key));
+    for (const el of [...root.children] as HTMLElement[]) if (!keep.has(el.dataset.key!)) el.remove();
+
+    packs.forEach((f, i) => {
+      let g = root.querySelector<HTMLElement>(`[data-key="${f.key}"]`);
+      if (!g) {
+        g = gauge(f.key);
+        root.append(g);
+      }
+      if (root.children[i] !== g) root.insertBefore(g, root.children[i] ?? null);
+      const pct = Math.max(0, Math.min(100, num(f) ?? 0));
+      const name = !multi ? "battery" : f.role === "battery" ? "main" : "expansion";
+      g.classList.toggle("secondary", i > 0);
+      g.dataset.level = pct <= 20 ? "low" : pct <= 50 ? "mid" : "high";
+      g.setAttribute("aria-label", `${multi ? name[0]!.toUpperCase() + name.slice(1) + " battery" : "Battery"} ${Math.round(pct)} percent`);
+      g.querySelector(".level")!.setAttribute("stroke-dasharray", `${pct} 100`);
+      g.querySelector(".pct")!.replaceChildren(String(Math.round(pct)), h("small", {}, "%"));
+      g.querySelector(".pct-label")!.textContent = name;
+    });
   }
 
   private renderPorts(list: HTMLElement, ports: TelemetryField[], total: number, emptyText: string) {

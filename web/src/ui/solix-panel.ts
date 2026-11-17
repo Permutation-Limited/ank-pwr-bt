@@ -64,7 +64,11 @@ export class SolixPanel {
     block.replaceChildren(table);
     $("solixRawHint").hidden = true;
 
-    if (t.fields.length) fillKv($("solixDecoded"), t.fields.map((f) => [f.label, formatField(f)]));
+    // Port labels are short ("AC") because the status page groups them under
+    // Input/Output; in this flat list, say which side they're on.
+    const label = (f: TelemetryEvent["fields"][number]) =>
+      f.role === "input" ? `${f.label} in` : f.role === "output" ? `${f.label} out` : f.label;
+    if (t.fields.length) fillKv($("solixDecoded"), t.fields.map((f) => [label(f), formatField(f)]));
   }
 
   /**

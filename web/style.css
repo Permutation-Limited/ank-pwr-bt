@@ -70,12 +70,25 @@ button.small { padding: 1px 6px; font-size: 11px; border-radius: 6px; }
 .meta { color: var(--muted); font-size: 13px; }
 
 .battery-card, .flow-card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); }
-.battery-card { display: flex; align-items: center; gap: 36px; padding: 28px 32px; margin-bottom: 16px; --level: var(--lvl-high); }
-.battery-card[data-level="mid"] { --level: var(--lvl-mid); }
-.battery-card[data-level="low"] { --level: var(--lvl-low); }
-@media (max-width: 560px) { .battery-card { flex-direction: column; gap: 20px; padding: 24px 16px; text-align: center; } }
+.battery-card { display: flex; align-items: center; gap: 36px; padding: 28px 32px; margin-bottom: 16px; }
+@media (max-width: 680px) { .battery-card { flex-direction: column; gap: 20px; padding: 24px 16px; text-align: center; } }
 
-.ring { position: relative; width: 200px; height: 200px; flex: none; }
+.gauges { display: flex; align-items: center; gap: 24px; flex: none; }
+.ring { position: relative; width: 200px; height: 200px; flex: none; --level: var(--lvl-high); }
+.ring[data-level="mid"] { --level: var(--lvl-mid); }
+.ring[data-level="low"] { --level: var(--lvl-low); }
+.ring.secondary { width: 140px; height: 140px; }
+.ring.secondary circle { stroke-width: 12; }
+.ring.secondary .pct { font-size: 32px; }
+.ring.secondary .pct small { font-size: 16px; }
+.ring.secondary .pct-label { margin-top: 4px; font-size: 11px; }
+@media (max-width: 420px) {
+  .gauges { gap: 14px; }
+  .gauges.multi .ring { width: 150px; height: 150px; }
+  .gauges.multi .ring .pct { font-size: 36px; }
+  .gauges.multi .ring.secondary { width: 112px; height: 112px; }
+  .gauges.multi .ring.secondary .pct { font-size: 26px; }
+}
 .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .ring circle { fill: none; stroke-width: 10; }
 .ring .track { stroke: var(--track); }

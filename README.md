@@ -3,7 +3,7 @@
 See and monitor Anker SOLIX power stations straight from Chrome over Web
 Bluetooth. No app or cloud account needed.
 
-![Status page showing a SOLIX C2000 Gen 2 at 100% battery with 38 W output](docs/status.png)
+![Status page showing a SOLIX C2000 Gen 2 with main and expansion battery gauges and live power output](docs/status.png)
 
 ## Run it
 
