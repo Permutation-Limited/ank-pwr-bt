@@ -5,8 +5,8 @@
 interface Route { view: string; title: string }
 
 const ROUTES: Record<string, Route> = {
-  "/": { view: "view-status", title: "SOLIX Status" },
-  "/debug": { view: "view-debug", title: "SOLIX Debug" },
+  "/": { view: "view-status", title: "Power Station" },
+  "/debug": { view: "view-debug", title: "Power Station · Debug" },
 };
 
 function show(path: string) {
