@@ -191,9 +191,13 @@ describe("device models", () => {
       dc_port: "not connected", max_charge: 100,
       // a6[7:9] = 0x027a = 634 -> 63.4 h; the station's screen showed 2 d 15 h.
       time_remaining: 63.4,
-      battery_pack_serial: "APCXXXXXX00000002", battery_pack: "A1783_2kWh",
+      expansion_battery_percent: 92, expansion_temperature: 20,
+      expansion_serial: "APCXXXXXX00000002", expansion_model: "A1783_2kWh",
     });
     expect(model.partNumber!(params)).toBe("A1783");
+    // Without an expansion pack in c0, no expansion fields appear.
+    const noExpansion = new Map([...params].filter(([k]) => k !== 0xc0));
+    expect(model.decodeTelemetry("c421", noExpansion).some((x) => x.key.startsWith("expansion"))).toBe(false);
     expect(model.decodeTelemetry("0300", params)).toEqual([]);
   });
 });

@@ -8,7 +8,11 @@
 // Beyond SolixBLE, mapped on the C2000:
 // - a6[7:9]: time remaining, 0.1 h units. The station's screen showed 2 d 15 h
 //   (63 h) while this read 61–67 h; the screen shows a smoothed value.
-// - c0: battery pack serial and label ("A1783_2kWh"), length-prefixed ASCII.
+// - c0: expansion battery. [1] length + serial (ASCII), [26] charge % (read
+//   92 when the user's expansion pack was at 92%, and stepped 93 → 92 while
+//   discharging), [33] length + model label ("A1783_2kWh"). Its layout mirrors
+//   the main battery's a5: [24] ↔ a5[1] temperature (unverified), [27] ↔ a5[4]
+//   (both 232, unknown).
 // Ports report only status and watts (no per-port voltage or current), unlike
 // the Prime chargers' tags.
 
@@ -39,6 +43,20 @@ function lengthPrefixed(p: Params, key: number, lenAt: number) {
   return ascii(p, key, lenAt + 1, lenAt + 1 + len);
 }
 
+type Row = [string, string, FieldRole, number | string | undefined, string?];
+
+/** Expansion battery fields from c0; none if no expansion pack is reported. */
+function expansionRows(p: Params): Row[] {
+  const serial = lengthPrefixed(p, 0xc0, 1);
+  if (!serial) return [];
+  return [
+    ["expansion_battery_percent", "Expansion battery", "expansion_battery", paramInt(p, 0xc0, 26, 27), "%"],
+    ["expansion_temperature", "Expansion temperature (unverified)", "info", paramInt(p, 0xc0, 24, 25, true), "°C"],
+    ["expansion_serial", "Expansion battery serial", "info", serial],
+    ["expansion_model", "Expansion battery model", "info", lengthPrefixed(p, 0xc0, 33)],
+  ];
+}
+
 /** a6[7:9] in 0.1 h units. */
 function hoursRemaining(p: Params) {
   const raw = paramInt(p, 0xa6, 7, 9);
@@ -62,15 +80,14 @@ export const gen2: DeviceModel = {
 
   decodeTelemetry(cmd, p) {
     if (!TELEMETRY_CMDS.includes(cmd)) return [];
-    const rows: [string, string, FieldRole, number | string | undefined, string?][] = [
+    const rows: Row[] = [
       ["serial", "Serial number", "info", ascii(p, 0xa2, 3, 20)],
       ["part_number", "Part number", "info", ascii(p, 0xa2, 22, 27)],
-      ["battery_percent", "Battery", "battery", paramInt(p, 0xa5, 3, 4), "%"],
+      ["battery_percent", "Main battery", "battery", paramInt(p, 0xa5, 3, 4), "%"],
       // C1000 Gen 2's battery health byte (a5[4]) read 232 on a C2000; omitted.
       ["temperature", "Temperature", "temperature", paramInt(p, 0xa5, 1, 2, true), "°C"],
       ["time_remaining", "Time remaining", "time_remaining", hoursRemaining(p), "h"],
-      ["battery_pack_serial", "Battery pack serial", "info", lengthPrefixed(p, 0xc0, 1)],
-      ["battery_pack", "Battery pack", "info", lengthPrefixed(p, 0xc0, 33)],
+      ...expansionRows(p),
       ["power_out", "Total output", "output_total", paramInt(p, 0xa6, 1, 3), "W"],
       ["ac_in", "AC", "input", paramInt(p, 0xa6, 3, 5), "W"],
       ["solar_in", "Solar", "input", paramInt(p, 0xa8, 2), "W"],
