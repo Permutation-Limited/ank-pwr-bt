@@ -1,33 +1,37 @@
-// Human-readable names for well-known GATT UUIDs, plus the services we ask
-// Chrome for access to. Web Bluetooth only lets a page enumerate services that
-// were listed in `optionalServices` (or a filter) at requestDevice() time.
-
-/**
- * Anker SOLIX power stations expose a vendor service with a write
- * characteristic (commands) and a notify characteristic (telemetry).
- * UUIDs as reported by community reverse-engineering (e.g. SolixBLE); verify
- * against a real device.
- */
-export const ANKER_SOLIX_SERVICE = "8c850001-0302-41c5-b46e-cf057c562025";
-export const ANKER_SOLIX_WRITE = "8c850002-0302-41c5-b46e-cf057c562025";
-export const ANKER_SOLIX_NOTIFY = "8c850003-0302-41c5-b46e-cf057c562025";
+// GATT UUIDs for Anker SOLIX devices and friendly names for well-known ones.
+// Web Bluetooth only lets a page enumerate services that were listed in
+// `optionalServices` (or a filter) at requestDevice() time.
+//
+// Anker values come from the SolixBLE project (github.com/flip-dots/SolixBLE).
 
 const BASE = "-0000-1000-8000-00805f9b34fb";
 const short = (n: number) => n.toString(16).padStart(8, "0") + BASE;
+
+/** Primary SOLIX service: carries ``ff09`` frames and a negotiated session. */
+export const SOLIX_SERVICE = short(0xff09);
+/** Write characteristic for commands and negotiation requests. */
+export const SOLIX_COMMAND = "8c850002-0302-41c5-b46e-cf057c562025";
+/** Notify characteristic for telemetry and negotiation replies. */
+export const SOLIX_TELEMETRY = "8c850003-0302-41c5-b46e-cf057c562025";
+
+/** Legacy transport (767 / F2000 on older firmware). Not spoken yet. */
+export const SOLIX_LEGACY_SERVICE = short(0x1780);
+/** Transport used by Prime power banks. Not spoken yet. */
+export const SOLIX_2215_SERVICE = short(0x2215);
+
+/** BLE company identifier Anker publishes its advertisement record under. */
+export const ANKER_COMPANY_ID = 0xffff;
+
+export const SOLIX_SERVICES = [SOLIX_SERVICE, SOLIX_LEGACY_SERVICE, SOLIX_2215_SERVICE];
 
 const SERVICES: Record<string, string> = {
   [short(0x1800)]: "Generic Access",
   [short(0x1801)]: "Generic Attribute",
   [short(0x180a)]: "Device Information",
   [short(0x180f)]: "Battery Service",
-  [short(0x1805)]: "Current Time",
-  [short(0x181c)]: "User Data",
-  [short(0xfe59)]: "Nordic DFU",
-  [short(0xfff0)]: "Vendor (0xFFF0)",
-  [short(0xffe0)]: "Vendor (0xFFE0)",
-  [short(0xff00)]: "Vendor (0xFF00)",
-  [short(0xae00)]: "Vendor (0xAE00)",
-  [ANKER_SOLIX_SERVICE]: "Anker SOLIX",
+  [SOLIX_SERVICE]: "Anker SOLIX",
+  [SOLIX_LEGACY_SERVICE]: "Anker SOLIX (legacy transport)",
+  [SOLIX_2215_SERVICE]: "Anker (2215 transport)",
 };
 
 const CHARACTERISTICS: Record<string, string> = {
@@ -44,8 +48,12 @@ const CHARACTERISTICS: Record<string, string> = {
   [short(0x2a28)]: "Software Revision",
   [short(0x2a29)]: "Manufacturer Name",
   [short(0x2a50)]: "PnP ID",
-  [ANKER_SOLIX_WRITE]: "Anker SOLIX command (write)",
-  [ANKER_SOLIX_NOTIFY]: "Anker SOLIX telemetry (notify)",
+  [SOLIX_COMMAND]: "SOLIX command (write)",
+  [SOLIX_TELEMETRY]: "SOLIX telemetry (notify)",
+  [short(0x7777)]: "SOLIX legacy command",
+  [short(0x8888)]: "SOLIX legacy telemetry",
+  "22150002-4002-81c5-b46e-cf057c562025": "2215 command",
+  "22150003-4002-81c5-b46e-cf057c562025": "2215 telemetry",
 };
 
 const DESCRIPTORS: Record<string, string> = {

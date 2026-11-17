@@ -4,11 +4,31 @@ A single-page web app that connects to Anker SOLIX power stations over
 **Web Bluetooth** in Chrome, with the goal of showing the same information as
 the Anker app.
 
-Current stage: a generic BLE explorer. Click **Connect via Bluetooth**, pick a
-device, and the page shows everything the Web Bluetooth API exposes: device
-id and name, advertisements (RSSI, TX power, manufacturer and service data),
-and the full GATT tree with characteristic properties, read values, descriptors,
-and live notifications.
+Click **Connect to SOLIX**. The device picker only lists Anker devices: ones that
+advertise the Anker manufacturer record (company `0xffff`) or a SOLIX
+service. After you pick one, the page runs the SOLIX handshake (P-256 ECDH, then
+AES-CBC or AES-GCM), subscribes to telemetry and shows:
+
+- **Session details:** serial number, MAC, firmware, MTU and the methods the
+  device announced.
+- **Decoded telemetry:** values decoded with the C1000 Gen 2 field map. These
+  are guesses for the C2000.
+- **Raw telemetry tags:** every tag the device sends, with changed values
+  highlighted, so you can map new fields against the Anker app.
+
+You can also read the generic BLE details: advertisements, plus a GATT tree
+(click **Read GATT tree**, or enable it in Options).
+
+The protocol is ported from [SolixBLE](https://github.com/flip-dots/SolixBLE).
+`web/src/solix/solix.test.ts` replays SolixBLE's recorded C1000 handshake and
+checks that the port matches it byte for byte:
+
+```bash
+bazel test //web:solix_test
+```
+
+If the handshake stalls on the device's registration step (`x827` status `09`),
+press the power station's IoT/Bluetooth button to approve the browser.
 
 ## Build and run
 
@@ -35,8 +55,14 @@ bazel build //web:site
 | `MODULE.bazel` | Bzlmod deps: `rules_shell`, plus the Bun download extension |
 | `tools/bun/` | Bun repository rule, static file server (`serve.ts`) and its launcher |
 | `web/BUILD.bazel` | `app_js` (bun build), `site` filegroup, `serve` runner |
-| `web/src/main.ts` | UI and Web Bluetooth logic |
-| `web/src/uuids.ts` | Known GATT UUIDs and the `optionalServices` list |
+| `web/src/main.ts` | UI, device picker filter, generic GATT explorer |
+| `web/src/solix-ui.ts` | Connects a SOLIX session to the GATT characteristics and renders it |
+| `web/src/solix/packet.ts` | `ff09` frames, TLV tags, fragment reassembly |
+| `web/src/solix/crypto.ts` | ECDH and AES-CBC/GCM on WebCrypto |
+| `web/src/solix/session.ts` | Negotiation state machine and session commands |
+| `web/src/solix/telemetry.ts` | Telemetry field map (C1000 Gen 2, unverified on C2000) |
+| `web/src/solix/advertisement.ts` | Anker manufacturer advertisement record |
+| `web/src/uuids.ts` | GATT UUIDs and the `optionalServices` list |
 | `web/src/format.ts` | Byte-buffer formatting helpers |
 
 ## Web Bluetooth notes
@@ -50,5 +76,5 @@ bazel build //web:site
   `chrome://flags/#enable-experimental-web-platform-features`.
 - `getDevices()` (reconnecting to previously permitted devices) needs
   `chrome://flags/#enable-web-bluetooth-new-permissions-backend`.
-- The SOLIX service UUID `8c850001-0302-41c5-b46e-cf057c562025` comes from
-  community reverse engineering. It hasn't been checked against a real device yet.
+- The SOLIX service is `0xff09`. It contains the command characteristic
+  `8c850002-…` (write) and the telemetry characteristic `8c850003-…` (notify).

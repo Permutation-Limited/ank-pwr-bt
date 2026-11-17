@@ -2,9 +2,12 @@
 // everything the API exposes (device, advertisements, GATT tree, values).
 
 import { describeValue, errMsg, propsList, toHex } from "./format";
+import { SolixController } from "./solix-ui";
+import { type AnkerRecord, KNOWN_PRODUCT_TYPES, parseAnkerRecord } from "./solix/advertisement";
+import type { OuterName } from "./solix/crypto";
 import {
-  DEFAULT_OPTIONAL_SERVICES, characteristicName, descriptorName, parseServiceUuid,
-  serviceName, shortUuid,
+  ANKER_COMPANY_ID, DEFAULT_OPTIONAL_SERVICES, SOLIX_SERVICES, characteristicName, descriptorName,
+  parseServiceUuid, serviceName, shortUuid,
 } from "./uuids";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -32,6 +35,16 @@ function fillKv(dl: HTMLElement, rows: [string, string][]) {
 
 let device: BluetoothDevice | null = null;
 let advAbort: AbortController | null = null;
+let ankerRecord: AnkerRecord | null = null;
+
+const solix = new SolixController({
+  log,
+  outerPreference: () => $<HTMLSelectElement>("outer").value as "auto" | OuterName,
+  autoSubscribe: () => $<HTMLInputElement>("autoSubscribe").checked,
+  advertisement: () => ankerRecord,
+  reconnect: async () => { await connect(); return !!device?.gatt?.connected; },
+  settled: () => { if ($<HTMLInputElement>("autoGatt").checked) void renderGatt(); },
+});
 
 // ---------------------------------------------------------------- API info
 
@@ -99,10 +112,21 @@ function requestOptions(): RequestDeviceOptions {
     .filter((n) => Number.isInteger(n) && n >= 0 && n <= 0xffff);
   const opts: RequestDeviceOptions = {
     optionalServices: [...DEFAULT_OPTIONAL_SERVICES, ...extra],
-    optionalManufacturerData: manufacturerIds,
+    optionalManufacturerData: [ANKER_COMPANY_ID, ...manufacturerIds],
   };
-  if ($<HTMLInputElement>("acceptAll").checked) opts.acceptAllDevices = true;
-  else opts.filters = [{ namePrefix: $<HTMLInputElement>("namePrefix").value || "Anker" }];
+  if ($<HTMLInputElement>("acceptAll").checked) {
+    opts.acceptAllDevices = true;
+  } else {
+    // Same rule as SolixBLE's discover_devices(): the Anker manufacturer
+    // record (company 0xffff) or one of the SOLIX transport services. Name
+    // prefixes catch devices whose advertisement Chrome only partly saw.
+    opts.filters = [
+      { manufacturerData: [{ companyIdentifier: ANKER_COMPANY_ID }] },
+      ...SOLIX_SERVICES.map((s) => ({ services: [s] })),
+      { namePrefix: "Anker" },
+      { namePrefix: "SOLIX" },
+    ];
+  }
   return opts;
 }
 
@@ -115,9 +139,11 @@ async function chooseDevice() {
     log(errMsg(e), "err");
     return;
   }
+  ankerRecord = null;
   device.addEventListener("gattserverdisconnected", () => {
     log("gattserverdisconnected");
     renderDevice();
+    void solix.onDisconnected();
   });
   log(`selected ${device.name ?? "(unnamed)"} [${device.id}]`);
   await startAdvertisementWatch();
@@ -136,7 +162,16 @@ async function connect() {
     log(errMsg(e), "err");
   }
   renderDevice();
-  if (device.gatt.connected) await renderGatt();
+  if (!device.gatt.connected) return;
+  let isSolix = false;
+  try {
+    isSolix = await solix.attach(device);
+  } catch (e) {
+    log(`SOLIX setup: ${errMsg(e)}`, "err");
+  }
+  // Reading every characteristic while the handshake runs would interleave
+  // GATT operations with it, so the explorer waits for the session to settle.
+  if (!isSolix) await renderGatt();
 }
 
 // ---------------------------------------------------------------- advertisements
@@ -158,7 +193,19 @@ async function startAdvertisementWatch() {
       ["appearance", e.appearance != null ? `0x${e.appearance.toString(16)}` : "n/a"],
       ["uuids", e.uuids.map(shortUuid).join(", ") || "none"],
     ];
-    e.manufacturerData.forEach((v, id) => rows.push([`mfr 0x${id.toString(16).padStart(4, "0")}`, toHex(v)]));
+    e.manufacturerData.forEach((v, id) => {
+      rows.push([`mfr 0x${id.toString(16).padStart(4, "0")}`, toHex(v)]);
+      if (id !== ANKER_COMPANY_ID) return;
+      const rec = parseAnkerRecord(v);
+      if (!rec) return;
+      ankerRecord = rec;
+      rows.push(
+        ["anker product", `${rec.productType}${KNOWN_PRODUCT_TYPES[rec.productType] ? ` (${KNOWN_PRODUCT_TYPES[rec.productType]})` : " (unknown to SolixBLE)"}`],
+        ["anker sku", rec.sku],
+        ["anker mac", rec.mac],
+        ["anker capability", rec.capability == null ? "absent" : `0x${rec.capability.toString(16)}${rec.capability & 0x04 ? " (encrypted handshake)" : ""}`],
+      );
+    });
     e.serviceData.forEach((v, uuid) => rows.push([`svc ${shortUuid(uuid)}`, toHex(v)]));
     fillKv($("adv"), rows);
   }, { signal: advAbort.signal });
@@ -267,7 +314,8 @@ async function renderCharacteristic(c: BluetoothRemoteGATTCharacteristic): Promi
 
 $("connect").onclick = chooseDevice;
 $("reconnect").onclick = async () => { await startAdvertisementWatch(); await connect(); };
-$("disconnect").onclick = () => { device?.gatt?.disconnect(); advAbort?.abort(); renderDevice(); };
+$("disconnect").onclick = () => { solix.stop(); device?.gatt?.disconnect(); advAbort?.abort(); renderDevice(); };
+$("solixSubscribe").onclick = () => void solix.subscribe();
 $("rescan").onclick = renderGatt;
 $("clearLog").onclick = () => $("log").replaceChildren();
 navigator.bluetooth?.addEventListener("availabilitychanged", () => void renderApiInfo());

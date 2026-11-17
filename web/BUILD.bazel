@@ -1,9 +1,24 @@
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+# Protocol tests against fixtures recorded by SolixBLE.
+sh_test(
+    name = "solix_test",
+    srcs = ["//tools/bun:test.sh"],
+    args = [
+        "$(rlocationpath @bun//:bun)",
+        "$(rlocationpath src/solix/solix.test.ts)",
+    ],
+    data = glob(["src/**/*.ts"]) + ["@bun//:bun"],
+)
 
 # Bundle the TypeScript sources into a single browser JS file with Bun.
 genrule(
     name = "app_js",
-    srcs = glob(["src/**/*.ts"]),
+    srcs = glob(
+        ["src/**/*.ts"],
+        exclude = ["src/**/*.test.ts"],
+    ),
     outs = ["app.js"],
     cmd = " ".join([
         "HOME=$$(mktemp -d)",

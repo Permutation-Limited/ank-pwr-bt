@@ -14,17 +14,23 @@
 
   <section class="controls">
     <div class="row">
-      <button id="connect" class="primary">Connect via Bluetooth</button>
+      <button id="connect" class="primary">Connect to SOLIX</button>
       <button id="reconnect" disabled>Reconnect</button>
       <button id="disconnect" disabled>Disconnect</button>
-      <button id="rescan" disabled>Re-read GATT</button>
+      <button id="rescan" disabled>Read GATT tree</button>
     </div>
     <details>
-      <summary>Request options</summary>
-      <label><input type="checkbox" id="acceptAll" checked> Show all nearby devices (acceptAllDevices)</label>
-      <label>Name prefix filter (used when the box above is unchecked)
-        <input id="namePrefix" value="Anker">
+      <summary>Options</summary>
+      <label><input type="checkbox" id="acceptAll"> Show all nearby devices, not just Anker (acceptAllDevices)</label>
+      <label>Handshake variant
+        <select id="outer">
+          <option value="auto" selected>Auto (advertisement hint, else plain, falling back to encrypted)</option>
+          <option value="plain">Plain (clear handshake, AES-CBC session)</option>
+          <option value="encrypted">Encrypted (AES-GCM handshake and session)</option>
+        </select>
       </label>
+      <label><input type="checkbox" id="autoSubscribe" checked> Send the telemetry subscribe command (4100) once authorized</label>
+      <label><input type="checkbox" id="autoGatt"> Read the full GATT tree after the handshake</label>
       <label>Extra optional service UUIDs (one per line; Web Bluetooth only exposes services listed here)
         <textarea id="extraServices" rows="3" spellcheck="false"></textarea>
       </label>
@@ -35,6 +41,23 @@
   </section>
 
   <main>
+    <section class="wide">
+      <h2>SOLIX <span id="solixState" class="pill">not started</span>
+        <button id="solixSubscribe" class="small" disabled>send subscribe</button></h2>
+      <div class="cols">
+        <div>
+          <h3>Session</h3>
+          <dl id="solixInfo" class="kv"><dt>—</dt><dd>Not connected</dd></dl>
+        </div>
+        <div>
+          <h3>Telemetry (C1000 Gen 2 field map, unverified on C2000)</h3>
+          <dl id="solixDecoded" class="kv"><dt>—</dt><dd>No telemetry yet</dd></dl>
+        </div>
+      </div>
+      <h3>Raw telemetry tags <span class="hint">(changed values highlighted)</span></h3>
+      <p id="solixRawHint" class="hint">Telemetry frames appear here once the session is authorized.</p>
+      <div id="solixRaw" class="rawgrid"></div>
+    </section>
     <section>
       <h2>Bluetooth API</h2>
       <dl id="api" class="kv"></dl>
