@@ -166,3 +166,10 @@ table.params tr.changed td { background: color-mix(in srgb, var(--accent) 18%, t
 #log { font: 12px var(--mono); max-height: 360px; overflow: auto; margin: 0; white-space: pre-wrap; }
 table.params mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inherit; border-radius: 2px; }
 table.params td span, table.params td mark { cursor: help; }
+
+/* ------------------------------------------------------------ footer */
+footer.site { max-width: 920px; margin: 0 auto; padding: 20px 20px 32px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; }
+footer.site p { margin: 4px 0; }
+footer.site a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+footer.site a:hover { color: var(--fg); }
+@media (max-width: 560px) { footer.site { padding: 16px 16px 28px; } }

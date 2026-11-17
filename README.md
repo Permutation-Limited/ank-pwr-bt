@@ -51,3 +51,15 @@ connect and show raw data on `/debug`.
 To add a device, write a `DeviceModel` and register it in
 `protocol/models/index.ts`. SolixBLE's `devices/*.py` field maps port over
 directly.
+
+## License and disclaimer
+
+Copyright © 2026 Permutation Limited. Released under the [MIT License](LICENSE).
+The protocol implementation is ported from SolixBLE (MIT); see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+This is an independent project. It is not affiliated with, endorsed by or
+sponsored by Anker Innovations. Anker and SOLIX are trademarks of Anker
+Innovations Limited, used here only to identify compatible devices. The
+Bluetooth protocol was reverse-engineered by the community and may change
+with firmware updates. Use at your own risk.
