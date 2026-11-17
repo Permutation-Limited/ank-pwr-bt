@@ -1,8 +1,9 @@
 // Protocol tests against fixtures recorded by SolixBLE (tests/const.py,
-// github.com/flip-dots/SolixBLE). Run with `bazel test //web:solix_test`.
+// github.com/flip-dots/SolixBLE). Run with `bazel test //web:protocol_test`.
 
 import { createECDH } from "node:crypto";
-import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
 import { parseAnkerRecord } from "./advertisement";
 import { fromHex, hex } from "./bytes";
 import { STATIC_KEYS, cbcDecrypt, deriveSessionKeys, gcmDecrypt } from "./crypto";
@@ -60,24 +61,24 @@ async function pinnedKeyPair(): Promise<CryptoKeyPair> {
 describe("packet", () => {
   test("parses frames and verifies checksums", () => {
     const p = parsePacket(fromHex(C1000_REPLIES[NEGOTIATION_COMMAND_1]!));
-    expect(hex(p.pattern)).toBe("030001");
-    expect(parseCommand(p.cmd)).toEqual({ fragmented: false, encrypted: false, msgtype: 0x803 });
+    assert.equal(hex(p.pattern), "030001");
+    assert.deepEqual(parseCommand(p.cmd), { fragmented: false, encrypted: false, msgtype: 0x803 });
     const { status, params } = parseParams(p.payload);
-    expect(status).toBe(0);
-    expect(hex(params.get(0xa2)!)).toBe("fd00");
-    expect(params.get(0xa3)![0]).toBe(0x44);
+    assert.equal(status, 0);
+    assert.equal(hex(params.get(0xa2)!), "fd00");
+    assert.equal(params.get(0xa3)![0], 0x44);
   });
 
   test("round-trips a frame", () => {
     const frame = fromHex(NEGOTIATION_COMMAND_0);
     const p = parsePacket(frame);
-    expect(hex(buildPacket(p.pattern, p.cmd, p.payload))).toBe(NEGOTIATION_COMMAND_0);
+    assert.equal(hex(buildPacket(p.pattern, p.cmd, p.payload)), NEGOTIATION_COMMAND_0);
   });
 
   test("rejects a bad checksum", () => {
     const bad = fromHex(NEGOTIATION_COMMAND_0);
     bad[bad.length - 1] ^= 1;
-    expect(() => parsePacket(bad)).toThrow();
+    assert.throws(() => parsePacket(bad));
   });
 
   test("reassembles fragmented telemetry", () => {
@@ -85,8 +86,8 @@ describe("packet", () => {
     let payload: Uint8Array | null = null;
     for (const f of SOLARBANK2_CLEAR_TELEMETRY) payload = r.push(parsePacket(fromHex(f)));
     const { params } = parseParams(payload!);
-    expect(new TextDecoder().decode(params.get(0xa2)!.subarray(1))).toBe("APCGQ80F08600350");
-    expect(params.has(0xfc)).toBe(true);
+    assert.equal(new TextDecoder().decode(params.get(0xa2)!.subarray(1)), "APCGQ80F08600350");
+    assert.equal(params.has(0xfc), true);
   });
 });
 
@@ -95,11 +96,11 @@ describe("crypto", () => {
     // Prime charger's encrypted x001 (SolixBLE NEGOTIATION_RESPONSES_PRIME).
     const p = parsePacket(fromHex("ff09200003000140010a82d0ab535303e3aa9f0c2f9c868465bc8476f556fb7d"));
     const plain = await gcmDecrypt(STATIC_KEYS, p.payload);
-    expect(hex(plain).startsWith("a104")).toBe(true);
+    assert.equal(hex(plain).startsWith("a104"), true);
     // ...and the device's reply to it.
     const r = parsePacket(fromHex("ff091e000300014801ab273ed3e27270c3f4d676ac7d69a00572793732a6"));
     const reply = parseParams(await gcmDecrypt(STATIC_KEYS, r.payload));
-    expect(reply.status).toBe(0);
+    assert.equal(reply.status, 0);
   });
 
   test("ECDH + CBC open the recorded C1000 x022", async () => {
@@ -108,15 +109,15 @@ describe("crypto", () => {
     const keys = await deriveSessionKeys(pair, deviceXY);
     const plain = await cbcDecrypt(keys, parsePacket(fromHex(SOLIX_NEGOTIATION_4022)).payload);
     const { params } = parseParams(plain);
-    expect(new TextDecoder().decode(params.get(0xa2)!)).toBe(CLIENT_ID);
+    assert.equal(new TextDecoder().decode(params.get(0xa2)!), CLIENT_ID);
   });
 
   test("advertisement record", () => {
     const rec = parseAnkerRecord(new DataView(fromHex("01aa12deadb34500b402514a4204").buffer))!;
-    expect(rec.productType).toBe("b402");
-    expect(rec.sku).toBe("QJB");
-    expect(rec.capability).toBe(0x04);
-    expect(rec.mac).toBe("AA:12:DE:AD:B3:45");
+    assert.equal(rec.productType, "b402");
+    assert.equal(rec.sku, "QJB");
+    assert.equal(rec.capability, 0x04);
+    assert.equal(rec.mac, "AA:12:DE:AD:B3:45");
   });
 });
 
@@ -141,33 +142,33 @@ describe("session", () => {
     // Let the reply chain run to completion.
     for (let i = 0; i < 50 && sent.length < 6; i++) await new Promise((r) => setTimeout(r, 5));
 
-    expect(sent.slice(0, 5)).toEqual([
+    assert.deepEqual(sent.slice(0, 5), [
       NEGOTIATION_COMMAND_0, NEGOTIATION_COMMAND_1, NEGOTIATION_COMMAND_2,
       NEGOTIATION_COMMAND_3, NEGOTIATION_COMMAND_4,
     ]);
-    expect(session.announcement.serial).toBe("APC9FE0E27300275");
-    expect(session.announcement.mac).toBe("F4:9D:8A:10:4E:0C");
+    assert.equal(session.announcement.serial, "APC9FE0E27300275");
+    assert.equal(session.announcement.mac, "F4:9D:8A:10:4E:0C");
 
     // 6th frame: x022 under the session keys (CBC), cmd 4022.
     const x022 = parsePacket(fromHex(sent[5]!));
-    expect(hex(x022.cmd)).toBe("4022");
+    assert.equal(hex(x022.cmd), "4022");
     const deviceXY = parseParams(parsePacket(fromHex(C1000_REPLIES[NEGOTIATION_COMMAND_4]!)).payload).params.get(0xa1)!;
     const keys = await deriveSessionKeys(pair, deviceXY);
     const { params } = parseParams(await cbcDecrypt(keys, x022.payload));
-    expect(new TextDecoder().decode(params.get(0xa2)!)).toBe(CLIENT_ID);
-    expect(new TextDecoder().decode(params.get(0xa5)!)).toBe("GMT0BST,M3.5.0/1,M10.5.0");
-    expect(session.state).toBe("negotiating");
+    assert.equal(new TextDecoder().decode(params.get(0xa2)!), CLIENT_ID);
+    assert.equal(new TextDecoder().decode(params.get(0xa5)!), "GMT0BST,M3.5.0/1,M10.5.0");
+    assert.equal(session.state, "negotiating");
   });
 });
 
 describe("device models", () => {
   test("resolves models from name, product type and part number", () => {
-    expect(resolveModel({ name: "SOLIX C2000 Gen 2" }).id).toBe("solix-gen2");
-    expect(resolveModel({ name: "SOLIX C1000 Gen 2" }).id).toBe("solix-gen2");
-    expect(resolveModel({ productType: "b118" }).id).toBe("solix-gen2");
-    expect(resolveModel({ partNumber: "A1783" }).id).toBe("solix-gen2");
-    expect(resolveModel({ name: "Anker SOLIX F3800" }).id).toBe("solix-generic");
-    expect(resolveModel({}).id).toBe("solix-generic");
+    assert.equal(resolveModel({ name: "SOLIX C2000 Gen 2" }).id, "solix-gen2");
+    assert.equal(resolveModel({ name: "SOLIX C1000 Gen 2" }).id, "solix-gen2");
+    assert.equal(resolveModel({ productType: "b118" }).id, "solix-gen2");
+    assert.equal(resolveModel({ partNumber: "A1783" }).id, "solix-gen2");
+    assert.equal(resolveModel({ name: "Anker SOLIX F3800" }).id, "solix-generic");
+    assert.equal(resolveModel({}).id, "solix-generic");
   });
 
   test("gen2 decodes telemetry captured live from a C2000 Gen 2 (c421)", () => {
@@ -185,7 +186,7 @@ describe("device models", () => {
     ]);
     const model = resolveModel({ name: "SOLIX C2000 Gen 2" });
     const f = Object.fromEntries(model.decodeTelemetry("c421", params).map((x) => [x.key, x.value]));
-    expect(f).toMatchObject({
+    const expected = {
       serial: "AXXXXXXXX00000001", part_number: "A1783", battery_percent: 100, temperature: 28,
       power_out: 38, ac_out: 31, ac_port: "output", solar_port: "input", usb_c1: 1, usb_c2: 6,
       dc_port: "not connected", max_charge: 100,
@@ -193,11 +194,12 @@ describe("device models", () => {
       time_remaining: 63.4,
       expansion_battery_percent: 92, expansion_temperature: 20,
       expansion_serial: "APCXXXXXX00000002", expansion_model: "A1783_2kWh",
-    });
-    expect(model.partNumber!(params)).toBe("A1783");
+    };
+    assert.deepEqual(Object.fromEntries(Object.keys(expected).map((k) => [k, f[k]])), expected);
+    assert.equal(model.partNumber!(params), "A1783");
     // Without an expansion pack in c0, no expansion fields appear.
     const noExpansion = new Map([...params].filter(([k]) => k !== 0xc0));
-    expect(model.decodeTelemetry("c421", noExpansion).some((x) => x.key.startsWith("expansion"))).toBe(false);
-    expect(model.decodeTelemetry("0300", params)).toEqual([]);
+    assert.equal(model.decodeTelemetry("c421", noExpansion).some((x) => x.key.startsWith("expansion")), false);
+    assert.deepEqual(model.decodeTelemetry("0300", params), []);
   });
 });

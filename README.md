@@ -22,12 +22,19 @@ you to approve the browser, short-press its power or IoT button.
 
 ## Develop
 
-You only need Bazel (via bazelisk). Bazel downloads Bun itself.
+You only need Bazel (via bazelisk). Bazel fetches Node.js, TypeScript, esbuild
+and the npm packages pinned in `pnpm-lock.yaml`.
 
 ```bash
-bazel run //web:serve          # http://localhost:8080
-bazel test //...               # protocol, device model and layering tests
-bazel build //web:dist         # deployable site as bazel-bin/web/dist.tar
+bazel run //web:serve          # http://localhost:8080 (ibazel run //web:serve to rebuild on edit)
+bazel test //...               # type-check, protocol, device model and layering tests
+bazel build //web:dist         # deployable site in bazel-bin/web/dist
+```
+
+After editing `package.json`, refresh the lockfile with Bazel's pinned pnpm:
+
+```bash
+bazel run -- @pnpm --dir $PWD install --lockfile-only
 ```
 
 Every push to `main` is tested, built and deployed to GitHub Pages by
@@ -43,7 +50,7 @@ each depending only on the one below. `web/src/architecture.test.ts` enforces th
 | --- | --- | --- |
 | Protocol | `web/src/protocol/` | Framing, crypto, handshake, device models. No DOM or Web Bluetooth. |
 | BLE client | `web/src/ble/` | `SolixClient`: connection, handshake retries, typed events. No DOM. |
-| UI | `web/src/ui/` | Status and debug pages, rendered from client events. |
+| UI | `web/src/ui/` | React + MUI status and debug pages, rendered from client events. |
 
 **Device models** (`web/src/protocol/models/`) hold everything model-specific:
 how to recognize the device, its handshake, its start-up commands and its

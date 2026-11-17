@@ -1,55 +1,71 @@
-// Enforces the layering described in main.ts:
-//   protocol/ -> nothing browser-specific, never imports ble/ or ui/
-//   ble/      -> may import protocol/, never ui/, never touches the DOM
-//   ui/       -> imports the BLE layer only through ble/index.ts, never protocol/
+// Enforces the layering described in main.tsx:
+//   protocol/ -> no DOM, no Web Bluetooth, no npm packages; never imports ble/ or ui/
+//   ble/      -> may import protocol/; no DOM, no npm packages; never imports ui/
+//   ui/       -> React/MUI and the BLE layer through ble/index.ts only; never protocol/
 
-import { describe, expect, test } from "bun:test";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import assert from "node:assert/strict";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { describe, test } from "node:test";
 
-const ROOT = import.meta.dir;
+/** The source tree, wherever Bazel's runfiles (or a plain checkout) put it. */
+const ROOT = [
+  process.env.JS_BINARY__RUNFILES && join(process.env.JS_BINARY__RUNFILES, "_main/web/src"),
+  join(process.cwd(), "web/src"),
+  join(process.cwd(), "src"),
+].find((p): p is string => !!p && existsSync(join(p, "main.tsx")));
 
 function sources(dir: string): string[] {
-  return readdirSync(join(ROOT, dir)).flatMap((name) => {
+  return readdirSync(join(ROOT!, dir)).flatMap((name) => {
     const rel = join(dir, name);
-    if (statSync(join(ROOT, rel)).isDirectory()) return sources(rel);
-    return rel.endsWith(".ts") && !rel.endsWith(".test.ts") && !rel.endsWith(".d.ts") ? [rel] : [];
+    if (statSync(join(ROOT!, rel)).isDirectory()) return sources(rel);
+    return /\.tsx?$/.test(rel) && !/\.(test|d)\.ts$/.test(rel) ? [rel] : [];
   });
 }
 
 const imports = (src: string) => [...src.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]!);
 const resolve = (file: string, spec: string) =>
-  spec.startsWith(".") ? relative(ROOT, join(ROOT, file, "..", spec)) : spec;
+  spec.startsWith(".") ? relative(ROOT!, join(ROOT!, file, "..", spec)) : spec;
 const code = (src: string) => src.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+const read = (f: string) => readFileSync(join(ROOT!, f), "utf8");
 
 describe("layering", () => {
-  test("protocol/ is DOM- and Web-Bluetooth-free", () => {
+  test("source tree found", () => {
+    assert.ok(ROOT, "could not locate web/src");
+    assert.ok(sources("ui").length > 0);
+  });
+
+  test("protocol/ is DOM-, Web-Bluetooth- and npm-free", () => {
     for (const f of sources("protocol")) {
-      const src = readFileSync(join(ROOT, f), "utf8");
-      expect({ f, dom: /\b(document|window)\./.test(code(src)), bt: /navigator\.bluetooth/.test(code(src)) })
-        .toEqual({ f, dom: false, bt: false });
+      const src = code(read(f));
+      assert.ok(!/\b(document|window)\./.test(src), `${f} touches the DOM`);
+      assert.ok(!/navigator\.bluetooth/.test(src), `${f} uses Web Bluetooth`);
       for (const spec of imports(src)) {
-        expect({ f, target: resolve(f, spec) }).not.toEqual(
-          expect.objectContaining({ target: expect.stringMatching(/^(ble|ui)(\/|$)/) }));
+        const target = resolve(f, spec);
+        assert.ok(spec.startsWith("."), `${f} imports npm package ${spec}`);
+        assert.ok(!/^(ble|ui)(\/|$)/.test(target), `${f} imports ${target}`);
       }
     }
   });
 
-  test("ble/ never touches the DOM or imports ui/", () => {
+  test("ble/ never touches the DOM, npm packages or ui/", () => {
     for (const f of sources("ble")) {
-      const src = readFileSync(join(ROOT, f), "utf8");
-      expect({ f, dom: /\bdocument\./.test(code(src)) }).toEqual({ f, dom: false });
-      for (const spec of imports(src)) expect({ f, target: resolve(f, spec).startsWith("ui") }).toEqual({ f, target: false });
+      const src = code(read(f));
+      assert.ok(!/\bdocument\./.test(src), `${f} touches the DOM`);
+      for (const spec of imports(src)) {
+        assert.ok(spec.startsWith("."), `${f} imports npm package ${spec}`);
+        assert.ok(!resolve(f, spec).startsWith("ui"), `${f} imports ui/`);
+      }
     }
   });
 
-  test("ui/ uses only ble/index.ts", () => {
-    for (const f of sources("ui")) {
-      const src = readFileSync(join(ROOT, f), "utf8");
-      for (const spec of imports(src)) {
+  test("ui/ reaches the BLE layer only through ble/index.ts", () => {
+    for (const f of [...sources("ui"), "main.tsx"]) {
+      for (const spec of imports(read(f))) {
+        if (!spec.startsWith(".")) continue; // react, @mui/*, @emotion/*
         const target = resolve(f, spec);
         const ok = target.startsWith("ui/") || target === "ble";
-        expect({ f, spec, ok }).toEqual({ f, spec, ok: true });
+        assert.ok(ok, `${f} imports ${spec} (only ble/index.ts and ui/ are allowed)`);
       }
     }
   });

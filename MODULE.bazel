@@ -1,8 +1,33 @@
 module(name = "ank_pwr_bt", version = "0.0.0")
 
-bazel_dep(name = "rules_shell", version = "0.6.1")
+bazel_dep(name = "aspect_rules_js", version = "3.6.1")
+bazel_dep(name = "aspect_rules_ts", version = "3.10.1")
+bazel_dep(name = "aspect_rules_esbuild", version = "0.27.1")
+bazel_dep(name = "bazel_lib", version = "3.7.0")
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
 
-# Hermetic Bun toolchain, downloaded from GitHub releases (see tools/bun/bun.bzl).
-bun = use_extension("//tools/bun:extensions.bzl", "bun")
-bun.toolchain(version = "1.4.4")
-use_repo(bun, "bun")
+# Bazel 9 compatibility, as in rules_ts' own e2e setup.
+bazel_dep(name = "rules_nodejs", version = "6.7.7", repo_name = None)
+bazel_dep(name = "protobuf", version = "33.4", repo_name = None)
+
+# npm packages from pnpm-lock.yaml. Regenerate the lock with:
+#   bazel run -- @pnpm --dir $PWD install --lockfile-only
+npm = use_extension("@aspect_rules_js//npm:extensions.bzl", "npm")
+npm.npm_translate_lock(
+    name = "npm",
+    data = [
+        "//:package.json",
+        "//:pnpm-workspace.yaml",
+    ],
+    pnpm_lock = "//:pnpm-lock.yaml",
+    verify_node_modules_ignored = "//:.bazelignore",
+)
+use_repo(npm, "npm")
+
+pnpm = use_extension("@aspect_rules_js//npm:extensions.bzl", "pnpm")
+use_repo(pnpm, "pnpm")
+
+# TypeScript compiler version follows package.json.
+rules_ts_ext = use_extension("@aspect_rules_ts//ts:extensions.bzl", "ext")
+rules_ts_ext.deps(ts_version_from = "//:package.json")
+use_repo(rules_ts_ext, "npm_typescript")

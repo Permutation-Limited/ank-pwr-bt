@@ -1,1 +1,0 @@
-exports_files(["serve.ts", "serve.sh", "test.sh"])

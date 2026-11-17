@@ -2,3 +2,7 @@ common --enable_bzlmod
 build --incompatible_strict_action_env
 # Show test/build errors inline
 build --verbose_failures
+test --test_output=errors
+
+# Aspect's rules_ts / rules_esbuild include a usage-telemetry module; opt out.
+common --repo_env=DO_NOT_TRACK=1

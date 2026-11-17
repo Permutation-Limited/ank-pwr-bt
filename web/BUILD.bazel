@@ -1,76 +1,121 @@
-load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
-load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("@aspect_rules_esbuild//esbuild:defs.bzl", "esbuild")
+load("@aspect_rules_js//js:defs.bzl", "js_run_devserver", "js_test")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
+load("@bazel_lib//lib:copy_to_directory.bzl", "copy_to_directory")
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("@npm//:http-server/package_json.bzl", http_server_bin = "bin")
 
-# Protocol tests (SolixBLE fixtures + live C2000 capture) and layering rules.
-sh_test(
-    name = "solix_test",
-    srcs = ["//tools/bun:test.sh"],
-    args = [
-        "$(rlocationpath @bun//:bun)",
-        "$(rlocationpath src/protocol/solix.test.ts)",
-        "$(rlocationpath src/architecture.test.ts)",
+APP_SRCS = glob(
+    ["src/**/*.ts", "src/**/*.tsx"],
+    exclude = ["src/**/*.test.ts"],
+)
+
+TEST_SRCS = glob(["src/**/*.test.ts"])
+
+APP_DEPS = [
+    "//:node_modules/@emotion/react",
+    "//:node_modules/@emotion/styled",
+    "//:node_modules/@mui/icons-material",
+    "//:node_modules/@mui/material",
+    "//:node_modules/react",
+    "//:node_modules/react-dom",
+]
+
+# Type-check the app and tests with tsc. Bundling below uses esbuild, which
+# only strips types, so this is what catches type errors.
+ts_project(
+    name = "typecheck",
+    srcs = APP_SRCS + TEST_SRCS,
+    no_emit = True,
+    tsconfig = "//:tsconfig",
+    deps = APP_DEPS + [
+        "//:node_modules/@types/node",
+        "//:node_modules/@types/react",
+        "//:node_modules/@types/react-dom",
     ],
-    data = glob(["src/**/*.ts"]) + ["@bun//:bun"],
 )
 
-# Bundle the TypeScript sources into a single browser JS file with Bun.
-genrule(
-    name = "app_js",
-    srcs = glob(
-        ["src/**/*.ts"],
-        exclude = ["src/**/*.test.ts"],
-    ),
-    outs = ["app.js"],
-    cmd = " ".join([
-        "HOME=$$(mktemp -d)",
-        "$(execpath @bun//:bun) build $(location src/main.ts)",
-        "--target=browser",
-        "--format=esm",
-        "--sourcemap=inline",
-        "--outfile=$@",
-    ]),
-    tools = ["@bun//:bun"],
-)
-
-# The complete static site.
+# tsc's result is in the "typecheck" output group; make `bazel test //...` run it.
 filegroup(
-    name = "site",
+    name = "typecheck_result",
+    srcs = [":typecheck"],
+    output_group = "typecheck",
+)
+
+build_test(
+    name = "typecheck_test",
+    targets = [":typecheck_result"],
+)
+
+# Browser bundle.
+esbuild(
+    name = "app",
+    srcs = APP_SRCS,
+    define = {"process.env.NODE_ENV": "\"production\""},
+    entry_point = "src/main.tsx",
+    format = "esm",
+    minify = True,
+    output = "app.js",
+    platform = "browser",
+    target = ["es2022"],
+    tsconfig = "//:tsconfig",
+    deps = APP_DEPS,
+)
+
+# Deployable static site: index.html + bundle (+ .nojekyll for GitHub Pages).
+copy_to_directory(
+    name = "dist",
     srcs = [
         "index.html",
-        "style.css",
-        ":app_js",
+        "public/.nojekyll",
+        ":app",
     ],
+    replace_prefixes = {"public/": ""},
     visibility = ["//visibility:public"],
 )
 
-# Deployable static site as a flat tarball (CI extracts it and uploads it to
-# GitHub Pages). .nojekyll stops Pages from post-processing the files.
-genrule(
-    name = "dist",
-    srcs = [":site"],
-    outs = ["dist.tar"],
-    cmd = " && ".join([
-        "out=$$PWD/$@",
-        "d=$$(mktemp -d)",
-        "for f in $(SRCS); do cp -L $$f $$d/; done",
-        "touch $$d/.nojekyll",
-        "(cd $$d && tar -cf $$out .)",
-    ]),
+# `bazel run //web:serve` -> http://localhost:8080
+# With ibazel (`ibazel run //web:serve`) it rebuilds and re-syncs on edits.
+http_server_bin.http_server_binary(name = "http_server")
+
+js_run_devserver(
+    name = "serve",
+    args = [
+        "dist",
+        "-a",
+        "localhost",
+        "-p",
+        "8080",
+        "-c-1",
+    ],
+    chdir = package_name(),
+    data = [":dist"],
+    tool = ":http_server",
 )
 
-# `bazel run //web:serve` -> http://localhost:8080
-sh_binary(
-    name = "serve",
-    srcs = ["//tools/bun:serve.sh"],
-    args = [
-        "$(rlocationpath @bun//:bun)",
-        "$(rlocationpath //tools/bun:serve.ts)",
-        "$(rlocationpath index.html)",
-    ],
-    data = [
-        "index.html",
-        ":site",
-        "//tools/bun:serve.ts",
-        "@bun//:bun",
-    ],
-)
+# Tests: esbuild bundles each test for Node, js_test runs it (node:test).
+[
+    (
+        esbuild(
+            name = name + "_bundle",
+            srcs = APP_SRCS + TEST_SRCS,
+            entry_point = entry,
+            format = "esm",
+            output = name + ".mjs",
+            platform = "node",
+            sourcemap = "inline",
+            target = ["node20"],
+            tsconfig = "//:tsconfig",
+        ),
+        js_test(
+            name = name,
+            data = data,
+            entry_point = name + ".mjs",
+        ),
+    )
+    for name, entry, data in [
+        ("protocol_test", "src/protocol/solix.test.ts", []),
+        # Reads the source tree to enforce layering, so it needs the sources.
+        ("architecture_test", "src/architecture.test.ts", APP_SRCS),
+    ]
+]
