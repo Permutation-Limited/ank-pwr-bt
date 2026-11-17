@@ -181,6 +181,7 @@ describe("device models", () => {
       [0xab, fromHex("04010600")],
       [0xb2, fromHex("04000000")],
       [0xd9, fromHex("040000066401000000003eeadc694ef8dc690000000000000000")],
+      [0xc0, fromHex("04114150435858585858583030303030303032010303090114015ce801010001000a41313738335f326b5768")],
     ]);
     const model = resolveModel({ name: "SOLIX C2000 Gen 2" });
     const f = Object.fromEntries(model.decodeTelemetry("c421", params).map((x) => [x.key, x.value]));
@@ -188,6 +189,9 @@ describe("device models", () => {
       serial: "AXXXXXXXX00000001", part_number: "A1783", battery_percent: 100, temperature: 28,
       power_out: 38, ac_out: 31, ac_port: "output", solar_port: "input", usb_c1: 1, usb_c2: 6,
       dc_port: "not connected", max_charge: 100,
+      // a6[7:9] = 0x027a = 634 -> 63.4 h; the station's screen showed 2 d 15 h.
+      time_remaining: 63.4,
+      battery_pack_serial: "APCXXXXXX00000002", battery_pack: "A1783_2kWh",
     });
     expect(model.partNumber!(params)).toBe("A1783");
     expect(model.decodeTelemetry("0300", params)).toEqual([]);

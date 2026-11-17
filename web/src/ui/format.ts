@@ -1,8 +1,26 @@
-// Display formatting for raw byte values.
+// Display formatting for raw byte values and decoded telemetry fields.
+
+import type { TelemetryField } from "../ble";
 
 export function toHex(view: DataView | Uint8Array): string {
   const b = view instanceof Uint8Array ? view : new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join(" ");
+}
+
+/** "63.0 h" → "2 d 15 h"; shorter durations as "5 h 30 min". */
+export function formatHours(hours: number): string {
+  const d = Math.floor(hours / 24);
+  const hRem = Math.floor(hours % 24);
+  if (d > 0) return `${d} d ${hRem} h`;
+  const m = Math.round((hours - Math.floor(hours)) * 60);
+  return m ? `${Math.floor(hours)} h ${m} min` : `${Math.floor(hours)} h`;
+}
+
+export function formatField(f: TelemetryField): string {
+  if (f.role === "time_remaining" && typeof f.value === "number") {
+    return `${formatHours(f.value)} (${f.value.toFixed(1)} h)`;
+  }
+  return `${f.value}${f.unit ? " " + f.unit : ""}`;
 }
 
 function toPrintable(view: DataView): string | null {

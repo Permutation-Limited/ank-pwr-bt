@@ -151,3 +151,5 @@ table.params tr.changed td { background: color-mix(in srgb, var(--accent) 18%, t
 #log .ok { color: var(--ok); }
 #log .warn { color: var(--warn); font-weight: 600; }
 #log { font: 12px var(--mono); max-height: 360px; overflow: auto; margin: 0; white-space: pre-wrap; }
+table.params mark { background: color-mix(in srgb, var(--warn) 35%, transparent); color: inherit; border-radius: 2px; }
+table.params td span, table.params td mark { cursor: help; }

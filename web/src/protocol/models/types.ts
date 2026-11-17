@@ -20,10 +20,11 @@ export interface DeviceHints {
  * - battery: state of charge (%)
  * - input / output: power on one port (W)
  * - input_total / output_total: power summed across ports (W)
+ * - time_remaining: hours until empty (discharging) or full (charging)
  * - temperature, port, setting, info: everything else
  */
 export type FieldRole =
-  | "battery" | "input" | "output" | "input_total" | "output_total"
+  | "battery" | "input" | "output" | "input_total" | "output_total" | "time_remaining"
   | "temperature" | "port" | "setting" | "info";
 
 /** One decoded telemetry value, ready to display. */

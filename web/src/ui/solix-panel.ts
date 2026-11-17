@@ -2,6 +2,7 @@
 
 import { type SessionSnapshot, type SolixClient, type TelemetryEvent, hex } from "../ble";
 import { $, fillKv, h, setPill } from "./dom";
+import { formatField } from "./format";
 
 export class SolixPanel {
   private lastParams = new Map<string, Map<number, string>>();
@@ -48,9 +49,10 @@ export class SolixPanel {
       `cmd ${t.cmd} · ${t.encrypted ? "encrypted" : "clear"} · ${t.params.size} tags · ${t.at.toLocaleTimeString()}`;
     for (const r of rows) {
       const tr = table.insertRow();
-      if (prev.size && prev.get(r.k) !== r.hex) tr.className = "changed";
+      const before = prev.get(r.k);
+      if (prev.size && before !== r.hex) tr.className = "changed";
       tr.insertCell().textContent = r.k.toString(16);
-      tr.insertCell().textContent = r.hex;
+      tr.insertCell().append(...this.byteSpans(r.hex, prev.size ? before : r.hex));
     }
     const raw = $("solixRaw");
     let block = raw.querySelector<HTMLElement>(`[data-cmd="${t.cmd}"]`);
@@ -62,8 +64,20 @@ export class SolixPanel {
     block.replaceChildren(table);
     $("solixRawHint").hidden = true;
 
-    if (t.fields.length) {
-      fillKv($("solixDecoded"), t.fields.map((f) => [f.label, `${f.value}${f.unit ? " " + f.unit : ""}`]));
-    }
+    if (t.fields.length) fillKv($("solixDecoded"), t.fields.map((f) => [f.label, formatField(f)]));
+  }
+
+  /**
+   * One span per byte (hover shows its offset); bytes that differ from the
+   * previous message of the same command are marked, so single-byte flags
+   * stand out in long tags.
+   */
+  private byteSpans(hexNow: string, hexBefore: string | undefined): Node[] {
+    const now = hexNow.match(/../g) ?? [];
+    const before = hexBefore?.match(/../g) ?? [];
+    return now.map((b, i) => {
+      const changed = hexBefore === undefined || before[i] !== b;
+      return h(changed ? "mark" : "span", { title: `byte ${i} = ${parseInt(b, 16)}` }, b);
+    });
   }
 }
