@@ -1,0 +1,8 @@
+module(name = "ank_pwr_bt", version = "0.0.0")
+
+bazel_dep(name = "rules_shell", version = "0.6.1")
+
+# Hermetic Bun toolchain, downloaded from GitHub releases (see tools/bun/bun.bzl).
+bun = use_extension("//tools/bun:extensions.bzl", "bun")
+bun.toolchain(version = "1.4.4")
+use_repo(bun, "bun")

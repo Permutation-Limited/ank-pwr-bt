@@ -1,0 +1,45 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+# Bundle the TypeScript sources into a single browser JS file with Bun.
+genrule(
+    name = "app_js",
+    srcs = glob(["src/**/*.ts"]),
+    outs = ["app.js"],
+    cmd = " ".join([
+        "HOME=$$(mktemp -d)",
+        "$(execpath @bun//:bun) build $(location src/main.ts)",
+        "--target=browser",
+        "--format=esm",
+        "--sourcemap=inline",
+        "--outfile=$@",
+    ]),
+    tools = ["@bun//:bun"],
+)
+
+# The complete static site.
+filegroup(
+    name = "site",
+    srcs = [
+        "index.html",
+        "style.css",
+        ":app_js",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# `bazel run //web:serve` -> http://localhost:8080
+sh_binary(
+    name = "serve",
+    srcs = ["//tools/bun:serve.sh"],
+    args = [
+        "$(rlocationpath @bun//:bun)",
+        "$(rlocationpath //tools/bun:serve.ts)",
+        "$(rlocationpath index.html)",
+    ],
+    data = [
+        "index.html",
+        ":site",
+        "//tools/bun:serve.ts",
+        "@bun//:bun",
+    ],
+)

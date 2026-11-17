@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solix BLE Explorer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Solix BLE Explorer</h1>
+    <span id="availability" class="pill">checking…</span>
+  </header>
+
+  <section class="controls">
+    <div class="row">
+      <button id="connect" class="primary">Connect via Bluetooth</button>
+      <button id="reconnect" disabled>Reconnect</button>
+      <button id="disconnect" disabled>Disconnect</button>
+      <button id="rescan" disabled>Re-read GATT</button>
+    </div>
+    <details>
+      <summary>Request options</summary>
+      <label><input type="checkbox" id="acceptAll" checked> Show all nearby devices (acceptAllDevices)</label>
+      <label>Name prefix filter (used when the box above is unchecked)
+        <input id="namePrefix" value="Anker">
+      </label>
+      <label>Extra optional service UUIDs (one per line; Web Bluetooth only exposes services listed here)
+        <textarea id="extraServices" rows="3" spellcheck="false"></textarea>
+      </label>
+      <label>Optional manufacturer IDs for advertisement data (comma-separated, decimal or 0x hex)
+        <input id="manufacturerIds" placeholder="e.g. 0x004c">
+      </label>
+    </details>
+  </section>
+
+  <main>
+    <section>
+      <h2>Bluetooth API</h2>
+      <dl id="api" class="kv"></dl>
+    </section>
+    <section>
+      <h2>Device</h2>
+      <dl id="device" class="kv"><dt>—</dt><dd>Not connected</dd></dl>
+    </section>
+    <section>
+      <h2>Advertisements</h2>
+      <p class="hint">Needs <code>chrome://flags/#enable-experimental-web-platform-features</code>.</p>
+      <dl id="adv" class="kv"><dt>—</dt><dd>No advertisement received</dd></dl>
+    </section>
+    <section class="wide">
+      <h2>GATT services</h2>
+      <div id="gatt"><p class="hint">Connect to a device to enumerate services.</p></div>
+    </section>
+    <section class="wide">
+      <h2>Log <button id="clearLog" class="small">clear</button></h2>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
