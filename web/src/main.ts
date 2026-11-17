@@ -61,12 +61,11 @@ async function connect() {
   }
 }
 
+// Connect/Disconnect live only in the site header.
 $("connect").onclick = connect;
-document.querySelectorAll<HTMLButtonElement>('[data-action="connect"]').forEach((b) => (b.onclick = connect));
-$("reconnect").onclick = () => { readSettings(); void client.connect(); };
 $("disconnect").onclick = () => client.disconnect();
 $("rescan").onclick = () => void explorer.renderGatt();
 $("clearLog").onclick = () => log.clear();
 onAvailabilityChanged(() => void refreshEnvironment());
 
-void refreshEnvironment().then(() => client.restorePermittedDevice());
+void refreshEnvironment();

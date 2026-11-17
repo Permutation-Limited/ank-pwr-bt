@@ -49,7 +49,6 @@ export class ExplorerPanel {
       ]);
     }
     $<HTMLButtonElement>("rescan").disabled = !c.connected;
-    $<HTMLButtonElement>("reconnect").disabled = c.connected || !c.device;
   }
 
   private renderAdvertisement(a: AdvertisementInfo) {
@@ -84,7 +83,7 @@ export class ExplorerPanel {
       services = await this.client.exploreGatt();
     } catch (e) {
       root.replaceChildren(h("p", { class: "err" }, `getPrimaryServices(): ${errMsg(e)}`),
-        h("p", { class: "hint" }, "Only services listed in optionalServices are visible. Add UUIDs under Options and reconnect."));
+        h("p", { class: "hint" }, "Only services listed in optionalServices are visible. Add UUIDs under Options and connect again."));
       this.log.add(`getPrimaryServices: ${errMsg(e)}`, "err");
       return;
     }

@@ -140,14 +140,6 @@ export class SolixClient extends Emitter<ClientEvents> {
     return true;
   }
 
-  /** Reuse a device this origin already has permission for (getDevices()). */
-  async restorePermittedDevice(): Promise<boolean> {
-    const devs = (await navigator.bluetooth?.getDevices?.().catch(() => [])) ?? [];
-    if (!devs.length || this.device) return false;
-    this.adopt(devs[0]!);
-    return true;
-  }
-
   /** Connect GATT and, for SOLIX devices, run the handshake. */
   async connect(): Promise<void> {
     const gatt = this.device?.gatt;

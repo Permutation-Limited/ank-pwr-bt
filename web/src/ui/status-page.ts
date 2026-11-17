@@ -97,7 +97,7 @@ export class StatusPage {
     const msg = $("statusWaiting");
     const s = this.session?.state;
     let text = "";
-    if (this.conn.device && !this.conn.connected) text = "Disconnected. Connect again to resume.";
+    if (this.conn.device && !this.conn.connected) text = "Disconnected. Click Connect at the top to resume.";
     else if (this.conn.connected) {
       if (s === "awaiting-confirmation") text = "Approve this browser on the power station: short-press its power or IoT button.";
       else if (s === "authorized") text = this.session?.model.id === "solix-generic"
