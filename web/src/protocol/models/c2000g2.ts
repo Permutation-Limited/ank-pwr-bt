@@ -10,6 +10,9 @@
 // - a5.03 battery health is omitted: firmware sends only the low byte of a
 //   0.1 % value (100.0 % = 1000 = 0x3E8 -> 232).
 // - Per-port voltage and current are not in this telemetry.
+// - a4.31 bit 0x08 is mains presence, not part of battery-only (see Settings).
+// - a3.00 working status and a5.01 battery status stayed idle/standby for 35 s
+//   of 850 W AC charging; upstream says battery status follows any flow.
 
 import { type TagSpec, decodeTags } from "../fieldmap";
 import { GEN2_ON_AUTHORIZED, GEN2_TELEMETRY_CMDS } from "./gen2";
@@ -125,7 +128,11 @@ export const C2000G2_FIELDS: readonly TagSpec[] = [
       { key: "device_timeout_minutes", label: "Device auto-off", type: "sile", at: 13, unit: "min" },
       { key: "port_memory_switch", label: "Port memory", type: "ui", at: 22, values: OFF_ON },
       { key: "outage_alert_switch", label: "Outage alert", type: "ui", at: 31, mask: 0x02, values: OFF_ON },
-      { key: "battery_only_switch", label: "Battery-only mode", type: "ui", at: 31, mask: 0x0c,
+      // Upstream maps battery-only to mask 0x0C, but on this unit bit 0x08 alone
+      // tracks mains: set while AC is absent, cleared ~2 s after it returns
+      // (verified by switching the station's AC supply on and off).
+      { key: "ac_grid_absent", label: "AC grid", type: "ui", at: 31, mask: 0x08, values: { 0: "present", 1: "absent" } },
+      { key: "battery_only_switch", label: "Battery-only mode (unverified)", type: "ui", at: 31, mask: 0x04,
         values: { 0: "off (AC input accepted)", 1: "on (AC input disabled)" } },
       { key: "temp_unit_fahrenheit", label: "Temperature unit", type: "ui", at: 19, values: { 0: "°C", 1: "°F" } },
       { key: "display_language", label: "Display language", type: "ui", at: 25,
@@ -157,7 +164,7 @@ export const C2000G2_FIELDS: readonly TagSpec[] = [
     tag: 0xd9, group: "Backup & time-of-use", sequential: true, fields: [
       { key: "active_tariff", label: "Active tariff", type: "ui", values: { 0: "none", 1: "peak", 2: "mid-peak", 3: "off-peak" } },
       { key: "usage_mode", label: "Usage mode", type: "ui",
-        values: { 0: "standard", 1: "time-of-use", 2: "self-consumption", 3: "custom" } },
+        values: { 0: "standard / UPS", 1: "time-of-use", 2: "self-consumption", 3: "custom" } },
       { key: "backup_soc", label: "Backup reserve", type: "ui", unit: "%" },
       { key: "backup_charge_soc", label: "Backup charge limit", type: "ui", unit: "%" },
       { key: "backup_discharge_soc", label: "Backup discharge limit", type: "ui", unit: "%" },

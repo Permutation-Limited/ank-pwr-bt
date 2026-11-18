@@ -238,7 +238,9 @@ describe("device models", () => {
       display_timeout_seconds: "10 s", temp_unit_fahrenheit: "°F (1)",
       clock_display_start_minutes: "08:00", clock_display_end_minutes: "18:00", clock_display_weekdays: "every day",
       display_night_start_minutes: "18:00", display_night_end_minutes: "23:00",
-      usage_mode: "standard (0)", backup_soc: 6, port_memory_switch_error: "none (0)",
+      usage_mode: "standard / UPS (0)", backup_soc: 6, port_memory_switch_error: "none (0)",
+      // a4.31 = 0x08: captured with the station's AC supply switched off.
+      ac_grid_absent: "absent (1)", battery_only_switch: "off (AC input accepted) (0)",
       mcu_version: "1.2.1.6", sub_mcu_version: "0.1.2.6", inverter_version: "0.1.2.6", bms_version: "1.9.3.3",
       sub_package_version: "1.9.3.3", hw_version: "0.3.3.0",
     };
