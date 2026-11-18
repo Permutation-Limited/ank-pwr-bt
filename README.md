@@ -60,17 +60,20 @@ connect and show raw data on `/debug`.
 
 | Model | Devices |
 | --- | --- |
-| `solix-gen2` | C1000 / C1000X Gen 2, C1000 Plus, C2000 Gen 2 (tested) |
+| `solix-c2000-gen2` | C2000 Gen 2 (tested): ~70 fields, table ported from anker-solix-api |
+| `solix-gen2` | C1000 / C1000X Gen 2, C1000 Plus (SolixBLE's field map) |
 | `solix-generic` | Any other SOLIX device (raw data only) |
 
 To add a device, write a `DeviceModel` and register it in
-`protocol/models/index.ts`. SolixBLE's `devices/*.py` field maps port over
-directly.
+`protocol/models/index.ts`. Field maps can be tables decoded by
+`protocol/fieldmap.ts`, which uses anker-solix-api's offsets and data types, so
+its `mqttmap.py` entries port over almost line for line.
 
 ## License and disclaimer
 
 Copyright © 2026 Permutation Limited. Released under the [MIT License](LICENSE).
-The protocol implementation is ported from SolixBLE (MIT); see
+The protocol implementation is ported from SolixBLE (MIT) and the C2000 Gen 2
+field map from anker-solix-api (MIT); see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 This is an independent project. It is not affiliated with, endorsed by or

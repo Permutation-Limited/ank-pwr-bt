@@ -35,6 +35,8 @@ export interface TelemetryField {
   value: number | string;
   unit?: string;
   role: FieldRole;
+  /** Section heading for detailed views, e.g. "Settings". */
+  group?: string;
 }
 
 /** A session command: ``cmd`` includes flag bits (e.g. "4100"); tags are raw TLV values. */

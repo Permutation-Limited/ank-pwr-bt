@@ -1,11 +1,12 @@
-// SOLIX Gen 2 power stations (C1000 Gen 2 / C1000X Gen 2 / C1000 Plus /
-// C2000 Gen 2). Field map from SolixBLE's devices/c1000g2.py; offsets index
-// the tag's raw bytes, type byte included.
+// SOLIX C1000 Gen 2 family (C1000 Gen 2 / C1000X Gen 2 / C1000 Plus). Field
+// map from SolixBLE's devices/c1000g2.py; offsets index the tag's raw bytes,
+// type byte included. The C2000 Gen 2 has its own, fuller map (c2000g2.ts)
+// but shares the Gen 2 connection behaviour exported here.
 //
-// Checked live on a C2000 Gen 2 (A1783): encrypted handshake; after the 4100
-// subscribe it streams c900, then c421 every ~3 s, with this tag layout.
+// Gen 2 stations take the encrypted handshake; after the 4100 subscribe they
+// stream c900, then c421 every ~3 s.
 //
-// Beyond SolixBLE, mapped on the C2000:
+// Mapped on a C2000 Gen 2 before its own map existed (layout shared):
 // - a6[7:9]: time remaining, 0.1 h units. The station's screen showed 2 d 15 h
 //   (63 h) while this read 61–67 h; the screen shows a smoothed value.
 // - c0: expansion battery. [1] length + serial (ASCII), [26] charge % (read
@@ -19,12 +20,19 @@
 // the Prime chargers' tags.
 
 import { type Params, paramInt } from "../packet";
-import type { DeviceModel, FieldRole, TelemetryField } from "./types";
+import type { DeviceModel, FieldRole, ModelCommand, TelemetryField } from "./types";
 
-const NAMES = [/^SOLIX C1000X? Gen 2/, /^SOLIX C1000 Plus/, /^SOLIX C2000X? Gen 2/];
-const PRODUCT_TYPES = ["b118", "b119"]; // A1763, A1765 (C2000's not yet seen)
-const PART_NUMBERS = ["A1763", "A1765", "A1783"];
-const TELEMETRY_CMDS = ["c421", "c900"];
+const NAMES = [/^SOLIX C1000X? Gen 2/, /^SOLIX C1000 Plus/];
+const PRODUCT_TYPES = ["b118", "b119"]; // A1763, A1765
+const PART_NUMBERS = ["A1763", "A1765"];
+
+/** Commands that carry Gen 2 telemetry. */
+export const GEN2_TELEMETRY_CMDS = ["c421", "c900"];
+
+/** Gen 2 stations stream nothing until they get this subscribe command. */
+export const GEN2_ON_AUTHORIZED: ModelCommand[] = [
+  { cmd: "4100", tags: [[0xa1, Uint8Array.of(0x21)]], description: "subscribe to telemetry" },
+];
 
 const PORT = ["not connected", "output", "input"];
 const port = (v: number | undefined) => (v === undefined ? undefined : PORT[v] ?? `unknown (${v})`);
@@ -67,7 +75,7 @@ function hoursRemaining(p: Params) {
 
 export const gen2: DeviceModel = {
   id: "solix-gen2",
-  name: "SOLIX Gen 2 power station",
+  name: "SOLIX C1000 Gen 2",
   preferredOuter: "encrypted",
 
   matches: ({ name, productType, partNumber }) =>
@@ -75,13 +83,12 @@ export const gen2: DeviceModel = {
     || (!!productType && PRODUCT_TYPES.includes(productType))
     || (!!partNumber && PART_NUMBERS.includes(partNumber)),
 
-  // Gen 2 streams nothing until it gets this subscribe command.
-  onAuthorized: [{ cmd: "4100", tags: [[0xa1, Uint8Array.of(0x21)]], description: "subscribe to telemetry" }],
+  onAuthorized: GEN2_ON_AUTHORIZED,
 
   partNumber: (p) => ascii(p, 0xa2, 22, 27),
 
   decodeTelemetry(cmd, p) {
-    if (!TELEMETRY_CMDS.includes(cmd)) return [];
+    if (!GEN2_TELEMETRY_CMDS.includes(cmd)) return [];
     const rows: Row[] = [
       ["serial", "Serial number", "info", ascii(p, 0xa2, 3, 20)],
       ["part_number", "Part number", "info", ascii(p, 0xa2, 22, 27)],

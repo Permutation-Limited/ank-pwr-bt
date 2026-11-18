@@ -31,6 +31,8 @@ export function DebugPage() {
       <Controls />
       <CardGrid>
         <SolixSection />
+        <TelemetrySection />
+        <RawSection />
         <ApiSection />
         <DeviceSection />
         <AdvertisementSection />
@@ -95,7 +97,7 @@ const fieldLabel = (f: TelemetryField) =>
 
 function SolixSection() {
   const store = useStore();
-  const { session, telemetry, raw } = useAppState();
+  const { session } = useAppState();
   const s = session;
   const a = s?.announcement ?? {};
   const tone: Tone = s?.state === "authorized" ? "success" : s?.state === "failed" || s?.state === "unsupported" ? "error"
@@ -124,21 +126,45 @@ function SolixSection() {
         )}
       </Stack>
     }>
-      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 2 }}>
-        <Box>
-          <Typography variant="subtitle2" gutterBottom>Session</Typography>
-          <KeyValue rows={rows} empty="Not connected" />
-        </Box>
-        <Box>
-          <Typography variant="subtitle2" gutterBottom>
-            Telemetry <Typography component="span" variant="body2" color="text.secondary">(decoded by the device model)</Typography>
-          </Typography>
-          <KeyValue rows={(telemetry?.fields ?? []).map((f) => [fieldLabel(f), formatField(f)])} empty="No telemetry yet" />
-        </Box>
-      </Box>
-      <Typography variant="subtitle2" sx={{ mt: 2 }} gutterBottom>
-        Raw telemetry tags <Typography component="span" variant="body2" color="text.secondary">(changed bytes highlighted; hover for offset)</Typography>
-      </Typography>
+      <KeyValue rows={rows} empty="Not connected" />
+    </Section>
+  );
+}
+
+/** Decoded fields, one block per group the device model assigns. */
+function TelemetrySection() {
+  const { telemetry, session } = useAppState();
+  const groups = new Map<string, TelemetryField[]>();
+  for (const f of telemetry?.fields ?? []) {
+    const g = f.group ?? "Telemetry";
+    groups.set(g, [...(groups.get(g) ?? []), f]);
+  }
+  return (
+    <Section wide title="Telemetry" action={session && (
+      <Typography variant="body2" color="text.secondary">decoded by the {session.model.name} model</Typography>
+    )}>
+      {groups.size === 0
+        ? <Typography color="text.secondary">No telemetry yet</Typography>
+        : (
+          <CardGrid sx={{ gap: 2.5, gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))" }}>
+            {[...groups].map(([group, fields]) => (
+              <Box key={group}>
+                <Typography variant="subtitle2" gutterBottom>{group}</Typography>
+                <KeyValue rows={fields.map((f) => [fieldLabel(f), formatField(f)])} />
+              </Box>
+            ))}
+          </CardGrid>
+        )}
+    </Section>
+  );
+}
+
+function RawSection() {
+  const { raw } = useAppState();
+  return (
+    <Section wide title="Raw telemetry tags" action={
+      <Typography variant="body2" color="text.secondary">changed bytes highlighted; hover for offset</Typography>
+    }>
       {Object.keys(raw).length === 0
         ? <Typography color="text.secondary">Telemetry frames appear here once the session is authorized.</Typography>
         : <CardGrid sx={{ gap: 1.5 }}>{Object.values(raw).map((f) => <RawTable key={f.cmd} frame={f} />)}</CardGrid>}

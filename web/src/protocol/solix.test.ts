@@ -163,15 +163,15 @@ describe("session", () => {
 
 describe("device models", () => {
   test("resolves models from name, product type and part number", () => {
-    assert.equal(resolveModel({ name: "SOLIX C2000 Gen 2" }).id, "solix-gen2");
+    assert.equal(resolveModel({ name: "SOLIX C2000 Gen 2" }).id, "solix-c2000-gen2");
+    assert.equal(resolveModel({ partNumber: "A1783" }).id, "solix-c2000-gen2");
     assert.equal(resolveModel({ name: "SOLIX C1000 Gen 2" }).id, "solix-gen2");
     assert.equal(resolveModel({ productType: "b118" }).id, "solix-gen2");
-    assert.equal(resolveModel({ partNumber: "A1783" }).id, "solix-gen2");
     assert.equal(resolveModel({ name: "Anker SOLIX F3800" }).id, "solix-generic");
     assert.equal(resolveModel({}).id, "solix-generic");
   });
 
-  test("gen2 decodes telemetry captured live from a C2000 Gen 2 (c421)", () => {
+  test("C1000 Gen 2 map decodes the shared Gen 2 layout (captured on a C2000)", () => {
     const params = new Map<number, Uint8Array>([
       [0xa2, fromHex("062011415858585858585858303030303030303100054131373833060102010001")],
       [0xa5, fromHex("041c0064e800")],
@@ -184,7 +184,7 @@ describe("device models", () => {
       [0xd9, fromHex("040000066401000000003eeadc694ef8dc690000000000000000")],
       [0xc0, fromHex("04114150435858585858583030303030303032010303090114015ce801010001000a41313738335f326b5768")],
     ]);
-    const model = resolveModel({ name: "SOLIX C2000 Gen 2" });
+    const model = resolveModel({ name: "SOLIX C1000 Gen 2" });
     const f = Object.fromEntries(model.decodeTelemetry("c421", params).map((x) => [x.key, x.value]));
     const expected = {
       serial: "AXXXXXXXX00000001", part_number: "A1783", battery_percent: 100, temperature: 28,
@@ -201,5 +201,55 @@ describe("device models", () => {
     const noExpansion = new Map([...params].filter(([k]) => k !== 0xc0));
     assert.equal(model.decodeTelemetry("c421", noExpansion).some((x) => x.key.startsWith("expansion")), false);
     assert.deepEqual(model.decodeTelemetry("0300", params), []);
+  });
+
+  test("C2000 Gen 2 map decodes a full frame captured live (solar charging)", () => {
+    const h = (x: string) => fromHex(x.replace(/ /g, ""));
+    const params = new Map<number, Uint8Array>([
+      [0xa2, h("062011415858585858585858303030303030303100054131373833060102010001")],
+      [0xa3, h("04 00 00 01 01 08 07 00 64 cc 00 58 02 00")],
+      [0xa4, h("04 00 00 00 00 20 03 3c 01 00 00 00 00 01 a0 05 0a 00 01 00 01 00 00 00 64 01 00 00 00 00 00 00 08 00")],
+      [0xa5, h("04 18 00 64 e8 00")],
+      [0xa6, h("04 20 00 00 00 66 00 43 00 64")],
+      [0xa7, h("04 01 1f 00 00 00 00")],
+      [0xa8, h("04 01 66 00")],
+      [0xaa, h("04 01 01 00")],
+      [0xab, h("04 00 00 00")],
+      [0xb2, h("04 00 00 00")],
+      [0xc0, h("04114150435858585858583030303030303032010303090114015ce801010001000a41313738335f326b5768")],
+      [0xce, h("04 10" + " 00".repeat(16) + " 00 01 11" + " 00".repeat(24))],
+      [0xd9, h("04 00 00 06 64 01 00 00 00 00 3e ea dc 69 4e f8 dc 69 00 00 00 00 00 00 00 00")],
+      [0xda, h("04 00 00 00 00 00 00 00 00 00 00 01 e0 01 38 04 7f 00 00 00 38 04 64 05")],
+      [0xdc, h("04 00 00 00 00 00")],
+      [0xf9, h("04 06 01 02 01 06 02 01 00 00 00 00 00 06 02 01 00 03 03 09 01 03 03 09 01 00 03 03 00")],
+    ]);
+    const model = resolveModel({ name: "SOLIX C2000 Gen 2" });
+    assert.equal(model.partNumber!(params), "A1783");
+    const f = Object.fromEntries(model.decodeTelemetry("c421", params).map((x) => [x.key, x.value]));
+    const expected = {
+      device_sn: "AXXXXXXXX00000001", device_pn: "A1783", sw_version: "1.2.1.6", model_variant: "1800 W AC input (0)",
+      working_status: "idle (0)", ac_input_limit_max: 1800, mtu_size: 204, silent_charge_power: 600,
+      temperature: 24, main_battery_soc: 100, remaining_time_hours: 6.7, output_power_total: 32,
+      dc_input_power_total: 102, dc_input_power: 102, ac_output_power: 31, ac_output_power_switch: "on (1)",
+      usbc_1_power: 1, usbc_1_status: "discharging (1)",
+      exp_1_sn: "APCXXXXXX00000002", exp_1_version: "1.9.3.3", exp_1_temperature: 20, exp_1_soc: 92,
+      exp_1_status: "discharging (1)", exp_1_connection_status: "fitted (1)", exp_1_type: "A1783_2kWh",
+      max_soc: 100, min_soc: 1, ac_input_limit: 800, ac_frequency: 60, device_timeout_minutes: 1440,
+      display_timeout_seconds: "10 s", temp_unit_fahrenheit: "°F (1)",
+      clock_display_start_minutes: "08:00", clock_display_end_minutes: "18:00", clock_display_weekdays: "every day",
+      display_night_start_minutes: "18:00", display_night_end_minutes: "23:00",
+      usage_mode: "standard (0)", backup_soc: 6, port_memory_switch_error: "none (0)",
+      mcu_version: "1.2.1.6", sub_mcu_version: "0.1.2.6", inverter_version: "0.1.2.6", bms_version: "1.9.3.3",
+      sub_package_version: "1.9.3.3", hw_version: "0.3.3.0",
+    };
+    assert.deepEqual(Object.fromEntries(Object.keys(expected).map((k) => [k, f[k]])), expected);
+    // Empty accessory slot and the firmware-bugged health byte stay out.
+    assert.equal(Object.keys(f).some((k) => k.startsWith("device_1_")), false);
+    assert.equal("battery_soh" in f, false);
+    // Status-page roles still resolve.
+    const roles = model.decodeTelemetry("c421", params).map((x) => x.role);
+    for (const r of ["battery", "expansion_battery", "input", "output", "output_total", "time_remaining"]) {
+      assert.ok(roles.includes(r as never), r);
+    }
   });
 });
