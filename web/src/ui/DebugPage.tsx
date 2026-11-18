@@ -142,7 +142,48 @@ function SolixSection() {
       {Object.keys(raw).length === 0
         ? <Typography color="text.secondary">Telemetry frames appear here once the session is authorized.</Typography>
         : <CardGrid sx={{ gap: 1.5 }}>{Object.values(raw).map((f) => <RawTable key={f.cmd} frame={f} />)}</CardGrid>}
+      <Recorder />
     </Section>
+  );
+}
+
+/**
+ * Records every telemetry frame (raw tags + decoded fields) so fields can be
+ * mapped offline: start it, change one thing on the station at a time, then
+ * copy or download the JSON.
+ */
+function Recorder() {
+  const store = useStore();
+  const { recording, connection } = useAppState();
+  const [copied, setCopied] = useState(false);
+  const n = recording.frames.length;
+  const copy = async () => {
+    await navigator.clipboard.writeText(store.recordingJson());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([store.recordingJson()], { type: "application/json" }));
+    const a = Object.assign(document.createElement("a"), { href: url, download: `telemetry-${new Date().toISOString().slice(0, 19)}.json` });
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, alignItems: "center", flexWrap: "wrap" }}>
+      <Button size="small" variant={recording.active ? "contained" : "outlined"} color={recording.active ? "error" : "inherit"}
+        disabled={!recording.active && !connection.connected} onClick={() => store.toggleRecording()}>
+        {recording.active ? "Stop recording" : "Record telemetry"}
+      </Button>
+      <Typography variant="body2" color="text.secondary">
+        {recording.active ? `Recording… ${n} frames` : n ? `${n} frames recorded` : "Record frames to map new fields offline"}
+      </Typography>
+      {n > 0 && !recording.active && (
+        <>
+          <Button size="small" onClick={() => void copy()}>{copied ? "Copied" : "Copy JSON"}</Button>
+          <Button size="small" onClick={download}>Download JSON</Button>
+        </>
+      )}
+    </Stack>
   );
 }
 

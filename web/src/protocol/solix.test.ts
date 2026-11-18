@@ -188,7 +188,7 @@ describe("device models", () => {
     const f = Object.fromEntries(model.decodeTelemetry("c421", params).map((x) => [x.key, x.value]));
     const expected = {
       serial: "AXXXXXXXX00000001", part_number: "A1783", battery_percent: 100, temperature: 28,
-      power_out: 38, ac_out: 31, ac_port: "output", solar_port: "input", usb_c1: 1, usb_c2: 6,
+      power_out: 38, input_power_a6: 0, ac_out: 31, ac_port: "output", solar_port: "input", usb_c1: 1, usb_c2: 6,
       dc_port: "not connected", max_charge: 100,
       // a6[7:9] = 0x027a = 634 -> 63.4 h; the station's screen showed 2 d 15 h.
       time_remaining: 63.4,

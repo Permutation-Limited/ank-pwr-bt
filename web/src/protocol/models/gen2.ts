@@ -13,6 +13,8 @@
 //   discharging), [33] length + model label ("A1783_2kWh"). Its layout mirrors
 //   the main battery's a5: [24] ↔ a5[1] temperature (unverified), [27] ↔ a5[4]
 //   (both 232, unknown).
+// - a6[5:7]: an input-power total. It tracked solar watts exactly (90-102 W,
+//   r = 1.00) with AC in at 0; whether it also counts AC input is unverified.
 // Ports report only status and watts (no per-port voltage or current), unlike
 // the Prime chargers' tags.
 
@@ -90,6 +92,7 @@ export const gen2: DeviceModel = {
       ...expansionRows(p),
       ["power_out", "Total output", "output_total", paramInt(p, 0xa6, 1, 3), "W"],
       ["ac_in", "AC", "input", paramInt(p, 0xa6, 3, 5), "W"],
+      ["input_power_a6", "Input total (unverified)", "info", paramInt(p, 0xa6, 5, 7), "W"],
       ["solar_in", "Solar", "input", paramInt(p, 0xa8, 2), "W"],
       ["ac_out", "AC", "output", paramInt(p, 0xa7, 2, 4), "W"],
       ["usb_c1", "USB-C1", "output", paramInt(p, 0xaa, 2), "W"],

@@ -34,6 +34,16 @@ export interface ConnectOptions {
   manufacturerIds: string;
 }
 
+/** One telemetry frame as recorded for offline field mapping. */
+export interface RecordedFrame {
+  t: string; // ISO time
+  cmd: string;
+  tags: Record<string, string>; // tag (hex) -> value (hex)
+  fields: Record<string, number | string>; // decoded fields, for correlating
+}
+
+export interface Recording { active: boolean; frames: RecordedFrame[] }
+
 export interface AppState {
   connection: ConnectionSnapshot;
   session: SessionSnapshot | null;
@@ -46,9 +56,12 @@ export interface AppState {
   log: LogEntry[];
   gatt: GattState;
   options: ConnectOptions;
+  recording: Recording;
 }
 
 const MAX_LOG = 500;
+/** ~2.5 h of frames at one every ~3 s. */
+const MAX_RECORDED = 3000;
 
 export class AppStore {
   private state: AppState = {
@@ -61,6 +74,7 @@ export class AppStore {
     environment: null,
     log: [],
     gatt: { status: "idle" },
+    recording: { active: false, frames: [] },
     options: {
       acceptAll: false, outer: "auto", runModelCommands: true, autoGatt: false,
       extraServices: "", manufacturerIds: "",
@@ -145,6 +159,21 @@ export class AppStore {
     this.set({ log: [...this.state.log.slice(-(MAX_LOG - 1)), entry] });
   }
 
+  /** Start a fresh recording, or stop the current one (frames are kept). */
+  toggleRecording() {
+    const r = this.state.recording;
+    this.set({ recording: r.active ? { ...r, active: false } : { active: true, frames: [] } });
+  }
+
+  /** The recording as JSON: frames plus enough context to analyse them later. */
+  recordingJson(): string {
+    const s = this.state.session;
+    return JSON.stringify({
+      device: this.state.connection.device?.name, model: s?.model.id,
+      firmware: s?.announcement.firmware, frames: this.state.recording.frames,
+    }, null, 1);
+  }
+
   clearLog() {
     this.set({ log: [] });
   }
@@ -158,7 +187,18 @@ export class AppStore {
       tags: [...t.params].map(([k, v]) => [k, hex(v)]),
       previous: before ? new Map(before.tags) : null,
     };
+    const rec = this.state.recording;
+    const recording = !rec.active || rec.frames.length >= MAX_RECORDED ? rec : {
+      active: true,
+      frames: [...rec.frames, {
+        t: t.at.toISOString(),
+        cmd: t.cmd,
+        tags: Object.fromEntries(frame.tags.map(([k, v]) => [k.toString(16), v])),
+        fields: Object.fromEntries(t.fields.map((f) => [f.key, f.value])),
+      }],
+    };
     this.set({
+      recording,
       raw: { ...this.state.raw, [t.cmd]: frame },
       ...(t.fields.length ? { telemetry: t } : {}),
     });
