@@ -63,7 +63,8 @@ esbuild(
 )
 
 # Deployable static site: index.html + bundle + web app manifest and icons
-# (so Chrome/Edge offer "Install app") + .nojekyll for GitHub Pages.
+# (so Chrome/Edge offer "Install app") + service worker (offline) +
+# .nojekyll for GitHub Pages.
 # icon-maskable.svg is the source for the PNGs only and isn't shipped.
 copy_to_directory(
     name = "dist",
@@ -76,6 +77,7 @@ copy_to_directory(
         "public/icon-512.png",
         "public/icon-maskable-512.png",
         "public/manifest.webmanifest",
+        "public/sw.js",
         ":app",
     ],
     replace_prefixes = {"public/": ""},

@@ -17,3 +17,8 @@ import { AppStore } from "./ui/store";
 migrateLegacyPath();
 const store = new AppStore(new SolixClient());
 createRoot(document.getElementById("root")!).render(<App store={store} />);
+
+// Network-first service worker (public/sw.js): lets the installed app open offline.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch((err) => console.warn("Service worker:", err));
+}
