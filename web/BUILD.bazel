@@ -62,12 +62,20 @@ esbuild(
     deps = APP_DEPS,
 )
 
-# Deployable static site: index.html + bundle (+ .nojekyll for GitHub Pages).
+# Deployable static site: index.html + bundle + web app manifest and icons
+# (so Chrome/Edge offer "Install app") + .nojekyll for GitHub Pages.
+# icon-maskable.svg is the source for the PNGs only and isn't shipped.
 copy_to_directory(
     name = "dist",
     srcs = [
         "index.html",
         "public/.nojekyll",
+        "public/apple-touch-icon.png",
+        "public/icon.svg",
+        "public/icon-192.png",
+        "public/icon-512.png",
+        "public/icon-maskable-512.png",
+        "public/manifest.webmanifest",
         ":app",
     ],
     replace_prefixes = {"public/": ""},
