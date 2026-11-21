@@ -212,7 +212,8 @@ const VERIFIED = "anker-solix-api MQTT map (A1783); verified on a C2000 Gen 2 ov
 
 export const C2000G2_SETTINGS: readonly SettingSpec[] = [
   // 0101: AC
-  { id: "ac_output_switch", label: "AC output", group: "AC", msgtype: 0x101, verified: true,
+  { id: "ac_output_switch", label: "AC output", group: "AC", msgtype: 0x101, verified: true, toggle: true,
+    output: { powerKey: "ac_output_power" },
     note: "Proven by SolixBLE on a C1000 Gen 2; same message in the A1783 map; not yet tried on a C2000",
     fields: [{ tag: 0xa2, type: "ui", label: "AC output", options: SWITCH, stateKey: "ac_output_power_switch" }] },
   { id: "ac_charge_limit", label: "AC recharging power", group: "AC", msgtype: 0x101, note: UPSTREAM,
@@ -231,7 +232,8 @@ export const C2000G2_SETTINGS: readonly SettingSpec[] = [
     fields: [{ tag: 0xa5, type: "ui", label: "Frequency", options: { 50: "50 Hz", 60: "60 Hz" }, stateKey: "ac_frequency" }] },
 
   // 0102: car / 12 V DC
-  { id: "dc_output_switch", label: "Car / 12 V DC output", group: "DC", msgtype: 0x102, verified: true,
+  { id: "dc_output_switch", label: "Car / 12 V DC output", group: "DC", msgtype: 0x102, verified: true, toggle: true,
+    output: { powerKey: "dc_output_power_total" },
     note: "SolixBLE (C1000 Gen 2); verified on a C2000 Gen 2 over BLE",
     fields: [{ tag: 0xa2, type: "ui", label: "DC output", options: SWITCH, stateKey: "dc_output_power_switch" }] },
   { id: "dc_12v_output_mode", label: "Car charger power saving mode", group: "DC", msgtype: 0x102, verified: true, note: VERIFIED,

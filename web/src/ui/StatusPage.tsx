@@ -1,5 +1,6 @@
-// Status (home) page: battery gauges and power in/out. Lays fields out by
-// their role, so it works for any device model.
+// Status (home) page: battery gauges, power in/out and output switches. Lays
+// fields out by their role and controls by the model's settings, so it works
+// for any device model.
 
 import BatteryIcon from "@mui/icons-material/BatteryAlert";
 import ScheduleIcon from "@mui/icons-material/Schedule";
@@ -10,16 +11,22 @@ import CardHeader from "@mui/material/CardHeader";
 import LinearProgress from "@mui/material/LinearProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import type { TelemetryField } from "../ble";
-import { formatHours } from "./format";
+import { useState } from "react";
+import type { SettingSpec, TelemetryField } from "../ble";
+import { formatHours, rawValue } from "./format";
 import { Gauge } from "./Gauge";
-import { useAppState } from "./store";
+import { OutputSwitch } from "./OutputSwitch";
+import { useAppState, useStore } from "./store";
 
 const num = (f?: TelemetryField) => (f && typeof f.value === "number" ? f.value : undefined);
 const sum = (fs: TelemetryField[]) => fs.reduce((n, f) => n + (num(f) ?? 0), 0);
 const watts = (n: number) => `${Math.round(n)} W`;
 
+/** An output port's switch: the model's setting and the port's state from telemetry. */
+interface PortSwitch { spec: SettingSpec; state: number | undefined; disabled: boolean }
+
 export function StatusPage() {
+  const store = useStore();
   const { connection, session, telemetry } = useAppState();
   const battery = telemetry?.fields.find((f) => f.role === "battery");
   if (!connection.connected || !telemetry || !battery) return <Waiting />;
@@ -31,6 +38,12 @@ export function StatusPage() {
   const totalOut = num(fields.find((f) => f.role === "output_total")) ?? sum(outputs);
   const packs = [battery, ...fields.filter((f) => f.role === "expansion_battery")];
   const temp = fields.find((f) => f.role === "temperature");
+  // Output ports the model can switch, keyed by the port's power field.
+  const byKey = new Map(fields.map((f) => [f.key, f]));
+  const switches = new Map(store.client.settingSpecs.filter((s) => s.output).map((spec): [string, PortSwitch] => [
+    spec.output!.powerKey,
+    { spec, state: rawValue(byKey.get(spec.fields[0]!.stateKey ?? "")), disabled: session?.state !== "authorized" },
+  ]));
   const net = totalIn - totalOut;
   const state = totalIn > totalOut && totalIn > 0 ? "charging" : totalOut > totalIn ? "discharging" : "idle";
   const allFull = packs.every((f) => (num(f) ?? 0) >= 100);
@@ -96,7 +109,7 @@ export function StatusPage() {
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2, alignItems: "start" }}>
         <FlowCard title="Input" total={totalIn} ports={inputs} color="flow.in" />
-        <FlowCard title="Output" total={totalOut} ports={outputs} color="flow.out" />
+        <FlowCard title="Output" total={totalOut} ports={outputs} color="flow.out" switches={switches} />
       </Box>
     </Stack>
   );
@@ -112,9 +125,13 @@ function Total({ label, value, color }: { label: string; value: number; color: s
   );
 }
 
-function FlowCard({ title, total, ports, color }: { title: string; total: number; ports: TelemetryField[]; color: string }) {
-  // Active ports first; idle ones stay listed but muted.
-  const sorted = [...ports].sort((a, b) => (num(b) ?? 0) - (num(a) ?? 0));
+function FlowCard({ title, total, ports, color, switches }: {
+  title: string; total: number; ports: TelemetryField[]; color: string; switches?: Map<string, PortSwitch>;
+}) {
+  // Switchable ports first in a fixed order (so a row doesn't jump when you
+  // turn it off), then the rest with active ones first; idle ones stay muted.
+  const order = (f: TelemetryField) => (switches?.has(f.key) ? 1 : 0);
+  const sorted = [...ports].sort((a, b) => order(b) - order(a) || (order(a) ? 0 : (num(b) ?? 0) - (num(a) ?? 0)));
   return (
     <Card variant="outlined" sx={{ borderRadius: 4 }}>
       <CardHeader title={title}
@@ -124,23 +141,37 @@ function FlowCard({ title, total, ports, color }: { title: string; total: number
       <CardContent>
         <Stack spacing={1.5}>
           {!sorted.length && <Typography color="text.secondary">No {title.toLowerCase()}s reported</Typography>}
-          {sorted.map((f) => {
-            const w = num(f) ?? 0;
-            const active = w > 0;
-            return (
-              <Box key={f.key}>
-                <Stack direction="row" sx={{ justifyContent: "space-between", color: active ? "text.primary" : "text.secondary", fontWeight: active ? 600 : 500 }}>
-                  <span>{f.label}</span>
-                  <Box component="span" sx={{ fontVariantNumeric: "tabular-nums" }}>{watts(w)}</Box>
-                </Stack>
-                <LinearProgress variant="determinate" value={total > 0 ? Math.min(100, (w / total) * 100) : 0}
-                  sx={{ mt: 0.75, height: 6, borderRadius: 3, bgcolor: "track", "& .MuiLinearProgress-bar": { bgcolor: color, borderRadius: 3 } }} />
-              </Box>
-            );
-          })}
+          {sorted.map((f) => <PortRow key={f.key} port={f} total={total} color={color} control={switches?.get(f.key)} />)}
         </Stack>
       </CardContent>
     </Card>
+  );
+}
+
+function PortRow({ port, total, color, control }: { port: TelemetryField; total: number; color: string; control?: PortSwitch }) {
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const w = num(port) ?? 0;
+  const active = w > 0;
+  const off = control?.state === 0;
+  return (
+    <Box>
+      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", minHeight: 28,
+        color: active ? "text.primary" : "text.secondary", fontWeight: active ? 600 : 500 }}>
+        <span>{port.label}</span>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+          <Box component="span" sx={{ fontVariantNumeric: "tabular-nums" }}>{off ? "Off" : watts(w)}</Box>
+          {control && (
+            <OutputSwitch spec={control.spec} label={port.label} state={control.state} watts={w}
+              disabled={control.disabled} onMessage={setMessage} />
+          )}
+        </Stack>
+      </Stack>
+      <LinearProgress variant="determinate" value={total > 0 ? Math.min(100, (w / total) * 100) : 0}
+        sx={{ mt: 0.75, height: 6, borderRadius: 3, bgcolor: "track", "& .MuiLinearProgress-bar": { bgcolor: color, borderRadius: 3 } }} />
+      {message && (
+        <Typography variant="caption" color={message.error ? "error" : "text.secondary"}>{message.text}</Typography>
+      )}
+    </Box>
   );
 }
 

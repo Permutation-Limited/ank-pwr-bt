@@ -25,7 +25,7 @@ import {
   type TimestampStyle, buildParams, errMsg, fromHex, parseParams, settingCmd, shortUuid,
 } from "../ble";
 import { CardGrid, KeyValue, Mono, Pill, Section, type Tone } from "./common";
-import { describeValue, formatField, toHex } from "./format";
+import { describeValue, formatField, rawValue, toHex } from "./format";
 import { type ConnectOptions, type RawFrame, useAppState, useStore } from "./store";
 import { MONO } from "./theme";
 
@@ -138,8 +138,6 @@ function SolixSection() {
 
 // ------------------------------------------------------------ settings (experimental)
 
-/** A setting's current number from its decoded field ("30 s" -> 30). */
-const rawValue = (f: TelemetryField | undefined) => f?.raw ?? (typeof f?.value === "number" ? f.value : undefined);
 
 const fieldDefault = (f: SettingField) =>
   f.default ?? (f.options ? Number(Object.keys(f.options)[0]) : f.min ?? 0);

@@ -90,6 +90,11 @@ export interface SettingSpec {
    * Only for single-field specs with off (0) / on (1) options.
    */
   toggle?: boolean;
+  /**
+   * Switches an output port. Status pages list these under "Outputs", with
+   * the watts from telemetry field ``powerKey``. Implies ``toggle``.
+   */
+  output?: { powerKey: string };
   /** Could leave the device in an unwanted state (e.g. AC frequency). */
   caution?: string;
 }

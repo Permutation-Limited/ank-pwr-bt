@@ -204,6 +204,13 @@ describe("settings", () => {
       assert.deepEqual(Object.keys(s.fields[0]!.options ?? {}), ["0", "1"], s.id);
     }
     assert.ok(spec("display_switch").toggle);
+    const keys = new Set(C2000G2_FIELDS.flatMap((t) => t.fields.map((f) => f.key)));
+    const outputs = C2000G2_SETTINGS.filter((x) => x.output);
+    assert.deepEqual(outputs.map((x) => x.id), ["ac_output_switch", "dc_output_switch"]);
+    for (const o of outputs) {
+      assert.ok(o.toggle, o.id);
+      assert.ok(keys.has(o.output!.powerKey), o.output!.powerKey);
+    }
   });
 
   test("every setting's state key is a field the C2000 Gen 2 decoder emits", () => {

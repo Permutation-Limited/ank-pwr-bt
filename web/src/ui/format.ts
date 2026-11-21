@@ -16,6 +16,10 @@ export function formatHours(hours: number): string {
   return m ? `${Math.floor(hours)} h ${m} min` : `${Math.floor(hours)} h`;
 }
 
+/** A field's underlying number ("30 s" -> 30, "on (1)" -> 1), if it has one. */
+export const rawValue = (f: TelemetryField | undefined) =>
+  f?.raw ?? (typeof f?.value === "number" ? f.value : undefined);
+
 export function formatField(f: TelemetryField): string {
   if (f.role === "time_remaining" && typeof f.value === "number") {
     return `${formatHours(f.value)} (${f.value.toFixed(1)} h)`;
