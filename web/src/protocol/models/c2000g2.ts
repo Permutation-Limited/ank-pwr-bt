@@ -16,7 +16,7 @@
 
 import { type TagSpec, decodeTags } from "../fieldmap";
 import { GEN2_ON_AUTHORIZED, GEN2_TELEMETRY_CMDS } from "./gen2";
-import type { DeviceModel } from "./types";
+import type { DeviceModel, SettingSpec } from "./types";
 
 const OFF_ON = { 0: "off", 1: "on" };
 const PORT_STATUS = { 0: "inactive", 1: "discharging", 2: "charging" };
@@ -141,7 +141,7 @@ export const C2000G2_FIELDS: readonly TagSpec[] = [
   },
   {
     tag: 0xa4, group: "Display", fields: [
-      { key: "display_switch", label: "Display", type: "ui", at: 21, values: OFF_ON },
+      { key: "display_switch", label: "Screen lit", type: "ui", at: 21, values: OFF_ON },
       { key: "display_mode", label: "Brightness", type: "ui", at: 17, values: { 1: "low", 2: "medium", 3: "high" } },
       { key: "display_timeout_seconds", label: "Display timeout", type: "sile", at: 15, format: "seconds" },
     ],
@@ -194,6 +194,108 @@ export const C2000G2_FIELDS: readonly TagSpec[] = [
   },
 ];
 
+// ------------------------------------------------------------------ settings
+// From anker-solix-api's mqttmap.py "A1783" command groups (MQTT message
+// types 0101 AC, 0102 DC, 0103 other, 0090 usage mode, 0091 display), sent
+// over BLE as 4101 etc. The station answers with 0x800 | msgtype (4101 ->
+// 4901, 4090 -> 4890), status 00 and a1 = 31.
+//
+// Verified on a live C2000 Gen 2 (fw 1.2.1.6) over BLE, fe timestamp, a1 = 21:
+// each setting was changed and set back, and telemetry followed within ~4 s.
+// The AC group (4101) is untested here: the test unit's AC output powers the
+// owner's network, so nothing was sent on that message.
+
+const SWITCH = { 0: "off", 1: "on" };
+const NORMAL_SMART = { 0: "normal", 1: "smart" };
+const UPSTREAM = "anker-solix-api MQTT map (A1783); untested over BLE";
+const VERIFIED = "anker-solix-api MQTT map (A1783); verified on a C2000 Gen 2 over BLE";
+
+export const C2000G2_SETTINGS: readonly SettingSpec[] = [
+  // 0101: AC
+  { id: "ac_output_switch", label: "AC output", group: "AC", msgtype: 0x101, verified: true,
+    note: "Proven by SolixBLE on a C1000 Gen 2; same message in the A1783 map; not yet tried on a C2000",
+    fields: [{ tag: 0xa2, type: "ui", label: "AC output", options: SWITCH, stateKey: "ac_output_power_switch" }] },
+  { id: "ac_charge_limit", label: "AC recharging power", group: "AC", msgtype: 0x101, note: UPSTREAM,
+    fields: [{ tag: 0xa4, type: "sile", label: "Limit", min: 200, max: 2400, step: 100, unit: "W", stateKey: "ac_input_limit" }] },
+  { id: "ac_fast_charge_switch", label: "Ultrafast charging", group: "AC", msgtype: 0x101, note: UPSTREAM,
+    fields: [{ tag: 0xa7, type: "ui", label: "Ultrafast", options: SWITCH, stateKey: "ac_fast_charge_switch" }] },
+  { id: "battery_only_switch", label: "Battery-only (AC input off)", group: "AC", msgtype: 0x101,
+    note: `${UPSTREAM}; sile type upstream; turning on also disables ultrafast`,
+    fields: [{ tag: 0xab, type: "sile", label: "Battery-only", options: SWITCH, stateKey: "battery_only_switch" }] },
+  { id: "ac_output_mode", label: "Smart AC output mode", group: "AC", msgtype: 0x101, note: UPSTREAM,
+    fields: [{ tag: 0xa6, type: "ui", label: "Mode", options: NORMAL_SMART, stateKey: "ac_output_mode" }] },
+  { id: "ac_output_timeout", label: "AC output auto-off", group: "AC", msgtype: 0x101, note: `${UPSTREAM}; 0 = never`,
+    fields: [{ tag: 0xa3, type: "var", label: "Timeout", min: 0, max: 86400, step: 300, unit: "s", default: 0 }] },
+  { id: "ac_frequency", label: "AC frequency", group: "AC", msgtype: 0x101, note: UPSTREAM,
+    caution: "Upstream warns this is a setup setting with device dependencies; don't change it with loads attached.",
+    fields: [{ tag: 0xa5, type: "ui", label: "Frequency", options: { 50: "50 Hz", 60: "60 Hz" }, stateKey: "ac_frequency" }] },
+
+  // 0102: car / 12 V DC
+  { id: "dc_output_switch", label: "Car / 12 V DC output", group: "DC", msgtype: 0x102, verified: true,
+    note: "SolixBLE (C1000 Gen 2); verified on a C2000 Gen 2 over BLE",
+    fields: [{ tag: 0xa2, type: "ui", label: "DC output", options: SWITCH, stateKey: "dc_output_power_switch" }] },
+  { id: "dc_12v_output_mode", label: "Car charger power saving mode", group: "DC", msgtype: 0x102, verified: true, note: VERIFIED,
+    fields: [{ tag: 0xa4, type: "ui", label: "Mode", options: NORMAL_SMART, stateKey: "dc_12v_output_mode" }] },
+  { id: "dc_output_timeout", label: "Car / DC output auto-off", group: "DC", msgtype: 0x102,
+    note: `${UPSTREAM}; 0 = never. Accepted (status 00) with the outlet off, but the countdown in telemetry stayed at 0`,
+    fields: [{ tag: 0xa3, type: "var", label: "Timeout", min: 0, max: 86400, step: 300, unit: "s", default: 0 }] },
+
+  // 0090: usage mode / backup
+  { id: "usage_mode", label: "Power usage scenario", group: "Backup & time-of-use", msgtype: 0x090, verified: true, note: VERIFIED,
+    fields: [{ tag: 0xa2, type: "ui", label: "Mode", options: { 0: "standard / UPS", 1: "time-of-use" }, stateKey: "usage_mode" }] },
+  { id: "backup_soc", label: "Backup reserve", group: "Backup & time-of-use", msgtype: 0x090, verified: true,
+    note: `${VERIFIED}; range min discharge + 5 to max charge`,
+    fields: [{ tag: 0xa5, type: "ui", label: "Reserve", min: 5, max: 100, unit: "%", stateKey: "backup_soc" }] },
+  // 005e: backup plans. a3 = plan (3 = backup), a4 = which option (1 = Storm Guard), a5 = on/off.
+  // The Fast Charging Plan (a4 = 0) also needs a6/a7 start and end timestamps; not offered here.
+  { id: "storm_guard", label: "Storm Guard", group: "Backup & time-of-use", msgtype: 0x05e, note: UPSTREAM,
+    fields: [
+      { tag: 0xa3, type: "ui", label: "Plan", options: { 3: "backup" } },
+      { tag: 0xa4, type: "ui", label: "Option", options: { 1: "Storm Guard" } },
+      { tag: 0xa5, type: "ui", label: "Storm Guard", options: SWITCH },
+    ] },
+
+  // 0103: battery limits and device
+  { id: "soc_limits", label: "Charge / discharge limits", group: "Battery", msgtype: 0x103, verified: true, note: VERIFIED,
+    fields: [
+      { tag: 0xaa, type: "ui", label: "Max charge", unit: "%", stateKey: "max_soc",
+        options: { 80: "80 %", 85: "85 %", 90: "90 %", 95: "95 %", 100: "100 %" } },
+      { tag: 0xab, type: "ui", label: "Min discharge", unit: "%", stateKey: "min_soc",
+        options: { 1: "1 %", 5: "5 %", 10: "10 %", 15: "15 %", 20: "20 %" } },
+    ] },
+  { id: "port_memory_switch", label: "Output port memory", group: "Device", msgtype: 0x103, verified: true, note: VERIFIED,
+    fields: [{ tag: 0xa8, type: "ui", label: "Port memory", options: SWITCH, stateKey: "port_memory_switch" }] },
+  { id: "outage_alert_switch", label: "Grid outage alert", group: "Device", msgtype: 0x103, verified: true, note: VERIFIED,
+    fields: [{ tag: 0xb0, type: "ui", label: "Outage alert", options: SWITCH, stateKey: "outage_alert_switch" }] },
+  { id: "device_timeout", label: "Device timeout", group: "Device", msgtype: 0x103, note: UPSTREAM,
+    fields: [{ tag: 0xa6, type: "sile", label: "Timeout", stateKey: "device_timeout_minutes",
+      options: { 0: "never", 30: "30 min", 60: "1 h", 120: "2 h", 240: "4 h", 360: "6 h", 720: "12 h", 1440: "24 h" } }] },
+  { id: "display_language", label: "Device language", group: "Device", msgtype: 0x103, note: UPSTREAM,
+    fields: [{ tag: 0xa9, type: "ui", label: "Language", stateKey: "display_language",
+      options: { 0: "English", 1: "Chinese", 2: "French", 3: "German", 4: "Japanese" } }] },
+  { id: "temp_unit", label: "Temperature unit", group: "Device", msgtype: 0x103, verified: true, note: VERIFIED,
+    fields: [{ tag: 0xa5, type: "ui", label: "Unit", options: { 0: "°C", 1: "°F" }, stateKey: "temp_unit_fahrenheit" }] },
+
+  // 0103 / 0091: display
+  { id: "display_switch", label: "Screen", group: "Display", msgtype: 0x103, verified: true, toggle: true,
+    note: "Turns the screen on or off right now, like the power button; not in the Anker app. It doesn't change "
+      + "any setting: the screen timeout and the station's own rules (e.g. screen on while recharging) still apply.",
+    fields: [{ tag: 0xa2, type: "ui", label: "Display", options: SWITCH, stateKey: "display_switch" }] },
+  { id: "display_mode", label: "Screen brightness", group: "Display", msgtype: 0x103, verified: true, note: VERIFIED,
+    fields: [{ tag: 0xa3, type: "ui", label: "Brightness", options: { 1: "low", 2: "medium", 3: "high" }, stateKey: "display_mode" }] },
+  { id: "display_timeout", label: "Screen timeout", group: "Display", msgtype: 0x103, verified: true,
+    note: `${VERIFIED}; the Anker app shows the value written here. Per the manual the screen stays on `
+      + "while recharging and during the screensaver hours; it stayed lit at 20 s while charging from solar.",
+    fields: [{ tag: 0xa4, type: "sile", label: "Timeout", stateKey: "display_timeout_seconds",
+      options: { 0: "never", 10: "10 s", 20: "20 s", 30: "30 s", 60: "1 min", 300: "5 min", 1800: "30 min" } }] },
+
+  // 0091 a2: one byte, screensaver on = 0x80, low 3 bits = theme (0-2 built in). Read back in da[0].
+  { id: "screensaver", label: "Screensaver", group: "Display", msgtype: 0x091,
+    note: `${UPSTREAM}; packed byte: also sets the theme to built-in theme 1`,
+    fields: [{ tag: 0xa2, type: "ui", label: "Screensaver", stateKey: "clock_switch",
+      mask: 0x80, options: SWITCH }] },
+];
+
 const NAMES = [/^SOLIX C2000X? Gen 2/];
 const PART_NUMBERS = ["A1783", "A1785"];
 
@@ -204,6 +306,7 @@ export const c2000g2: DeviceModel = {
   matches: ({ name, partNumber }) =>
     (!!name && NAMES.some((re) => re.test(name))) || (!!partNumber && PART_NUMBERS.includes(partNumber)),
   onAuthorized: GEN2_ON_AUTHORIZED,
+  settings: C2000G2_SETTINGS,
   partNumber: (p) => decodeTags([C2000G2_FIELDS[0]!], p).find((f) => f.key === "device_pn")?.value as string | undefined,
   decodeTelemetry: (cmd, p) => (GEN2_TELEMETRY_CMDS.includes(cmd) ? decodeTags(C2000G2_FIELDS, p) : []),
 };

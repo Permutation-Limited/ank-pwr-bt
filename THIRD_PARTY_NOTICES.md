@@ -34,11 +34,13 @@ SOFTWARE.
 
 ## anker-solix-api
 
-The SOLIX C2000 Gen 2 telemetry field map in
-`web/src/protocol/models/c2000g2.ts` (tag layouts, field names, value labels)
-and the data-type conventions in `web/src/protocol/fieldmap.ts` are ported from
+The SOLIX C2000 Gen 2 telemetry field map and settings commands in
+`web/src/protocol/models/c2000g2.ts` (tag layouts, field names, value labels,
+command message types and fields) and the data-type conventions in
+`web/src/protocol/fieldmap.ts` and `web/src/protocol/settings.ts` are ported from
 [anker-solix-api](https://github.com/thomluther/anker-solix-api)
-(`src/anker_solix_api/mqttmap.py`, `_A1783_0421`), used under the MIT License:
+(`src/anker_solix_api/mqttmap.py`, `_A1783_0421` and the `A1783` command
+groups; `mqttcmdmap.py`), used under the MIT License:
 
 ```
 MIT License

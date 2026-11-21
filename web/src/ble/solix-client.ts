@@ -3,9 +3,9 @@
 // everything through typed events. No DOM: any UI can sit on top.
 
 import {
-  type AnkerRecord, type Announcement, CAPABILITY_ENCRYPTED_ECDH, type DeviceModel, KNOWN_PRODUCT_TYPES,
-  type OuterName, type Params, type SessionState, SolixSession, type TelemetryField, parseAnkerRecord,
-  resolveModel,
+  type AnkerRecord, type Announcement, CAPABILITY_ENCRYPTED_ECDH, type CommandOptions, type DeviceModel,
+  KNOWN_PRODUCT_TYPES, type OuterName, type Params, type SessionState, type SettingSpec, SolixSession,
+  type TelemetryField, type TimestampStyle, buildSettingCommand, hex, parseAnkerRecord, resolveModel,
 } from "../protocol";
 import { Emitter, errMsg } from "./emitter";
 import { exploreGatt, type ServiceInfo } from "./gatt-explorer";
@@ -178,9 +178,19 @@ export class SolixClient extends Emitter<ClientEvents> {
   }
 
   /** Send a raw session command, e.g. ("4100", [[0xa1, Uint8Array.of(0x21)]]). */
-  async sendCommand(cmd: string, tags: [number, Uint8Array][]) {
+  async sendCommand(cmd: string, tags: [number, Uint8Array][], timestamp: TimestampStyle = "fe") {
     if (!this.session) throw new Error("no session");
-    await this.session.sendCommand(cmd, tags);
+    await this.session.sendCommand(cmd, tags, timestamp);
+  }
+
+  /** Settings the current model can change. */
+  get settingSpecs(): readonly SettingSpec[] { return this.model.settings ?? []; }
+
+  /** Send one settings command; values are in the spec's field order. */
+  async sendSetting(spec: SettingSpec, values: number[], opts: CommandOptions & { timestamp?: TimestampStyle } = {}) {
+    const c = buildSettingCommand(spec, values, opts);
+    await this.sendCommand(c.cmd, c.tags, opts.timestamp);
+    this.log(`sent ${c.description} (${c.cmd})`, "ok");
   }
 
   /** Send the resolved model's post-authorization commands. */
@@ -322,7 +332,7 @@ export class SolixClient extends Emitter<ClientEvents> {
       write: (frame) => this.writeFrame(frame),
       log: (m) => this.log(`solix: ${m}`),
       onState: (s) => this.onSessionState(s),
-      onMessage: (m) => this.onSessionMessage(m.cmd, m.encrypted, m.params),
+      onMessage: (m) => this.onSessionMessage(m.cmd, m.encrypted, m.params, m.status),
     });
     this.log(`starting SOLIX handshake (${outer} outer, model: ${this.model.name})`);
     this.emitSession();
@@ -381,7 +391,15 @@ export class SolixClient extends Emitter<ClientEvents> {
     }
   }
 
-  private onSessionMessage(cmd: string, encrypted: boolean, params: Params) {
+  private onSessionMessage(cmd: string, encrypted: boolean, params: Params, status: number | null) {
+    // Replies to our commands lead with a status byte; telemetry pushes don't.
+    if (status !== null) {
+      // Short replies (setting acks) in full; telemetry-sized ones (c900) as a tag count.
+      const all = [...params].map(([k, v]) => `${k.toString(16)}=${hex(v)}`).join(" ");
+      const tags = all.length <= 80 ? all : `${params.size} tags`;
+      this.log(`reply ${cmd} status 0x${status.toString(16).padStart(2, "0")}${tags ? ` ${tags}` : ""}`,
+        status === 0 ? "ok" : "warn");
+    }
     // Telemetry may reveal the exact model (part number) on generic devices.
     const part = this.model.partNumber?.(params);
     if (part) {

@@ -33,6 +33,8 @@ export interface TelemetryField {
   key: string; // stable id, e.g. "battery_percent"
   label: string; // human label, e.g. "Battery"
   value: number | string;
+  /** The undecoded number behind ``value`` (e.g. 30 for "30 s", 1 for "on (1)"), when there is one. */
+  raw?: number;
   unit?: string;
   role: FieldRole;
   /** Section heading for detailed views, e.g. "Settings". */
@@ -44,6 +46,52 @@ export interface ModelCommand {
   cmd: string;
   tags: [number, Uint8Array][];
   description: string;
+}
+
+/**
+ * One value inside a settings command: a TLV tag holding a type byte and a
+ * little-endian value (ui 1 byte, sile 2 bytes, var 4 bytes).
+ */
+export interface SettingField {
+  tag: number;
+  type: "ui" | "sile" | "var";
+  label: string;
+  /** Choices (value -> label); when absent, a number between min and max. */
+  options?: Record<number, string>;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  /** Telemetry field key that reads this setting back, to show the current value. */
+  stateKey?: string;
+  /** Single-bit flag inside a packed byte: 0/1 is sent as 0/mask (other bits 0). */
+  mask?: number;
+  /** Initial value when telemetry doesn't provide one. */
+  default?: number;
+}
+
+/**
+ * A settings command (``msgtype`` without flag bits, e.g. 0x101). Every
+ * field is sent together in one message, after the ``a1`` header.
+ */
+export interface SettingSpec {
+  id: string;
+  label: string;
+  group: string;
+  msgtype: number;
+  fields: SettingField[];
+  /** Where the definition comes from and how sure we are, shown in the UI. */
+  note?: string;
+  /** Proven on real hardware over BLE. */
+  verified?: boolean;
+  /**
+   * A live on/off action rather than a stored setting (e.g. light the screen
+   * now). UIs show it as a switch that follows telemetry and sends at once.
+   * Only for single-field specs with off (0) / on (1) options.
+   */
+  toggle?: boolean;
+  /** Could leave the device in an unwanted state (e.g. AC frequency). */
+  caution?: string;
 }
 
 export interface DeviceModel {
@@ -59,6 +107,8 @@ export interface DeviceModel {
   onAuthorized: ModelCommand[];
   /** Decode a telemetry message; return [] if it isn't one this model knows. */
   decodeTelemetry(cmd: string, params: Params): TelemetryField[];
+  /** Settings this model can change. */
+  settings?: readonly SettingSpec[];
   /** Pull a part number out of telemetry, if the model knows where it is. */
   partNumber?(params: Params): string | undefined;
 }

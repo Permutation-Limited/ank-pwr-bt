@@ -23,6 +23,7 @@ import {
   parsePacket, parseParams,
 } from "./packet";
 import { fromHex } from "./bytes";
+import type { TimestampStyle } from "./settings";
 import { offsetSecondsWest, posixTimezone } from "./timezone";
 
 /** Client id SolixBLE sends (a2 on the plain outer) and registers in x027. */
@@ -127,11 +128,17 @@ export class SolixSession {
     return this.queue;
   }
 
-  /** Send a session command (pattern 03000f) once authorized. ``cmd`` includes flag bits, e.g. "4100". */
-  async sendCommand(cmd: string, tags: Tags) {
+  /**
+   * Send a session command (pattern 03000f) once authorized. ``cmd`` includes
+   * flag bits, e.g. "4100". SolixBLE ends every command with a typed (03) u32
+   * seconds timestamp in fe; Anker's newer MQTT commands use fd, the time in
+   * ms as an ASCII string (type 00).
+   */
+  async sendCommand(cmd: string, tags: Tags, timestamp: TimestampStyle = "fe") {
     if (!this.keys) throw new Error("no session keys yet");
-    // Every session command carries a typed (03) timestamp under tag fe.
-    const payload = buildParams([...tags, [0xfe, concat(u8(3), this.ts())]]);
+    const stamp: Tags = timestamp === "fe" ? [[0xfe, concat(u8(3), this.ts())]]
+      : timestamp === "fd" ? [[0xfd, concat(u8(0), utf8(String(this.now() * 1000)))]] : [];
+    const payload = buildParams([...tags, ...stamp]);
     await this.writeFrame(PATTERN_SESSION, fromHex(cmd), payload);
   }
 

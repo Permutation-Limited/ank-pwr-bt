@@ -7,9 +7,11 @@ import { describe, test } from "node:test";
 import { parseAnkerRecord } from "./advertisement";
 import { fromHex, hex } from "./bytes";
 import { STATIC_KEYS, cbcDecrypt, deriveSessionKeys, gcmDecrypt } from "./crypto";
-import { Reassembler, buildPacket, parseCommand, parsePacket, parseParams } from "./packet";
+import { Reassembler, buildPacket, buildParams, parseCommand, parsePacket, parseParams } from "./packet";
 import { CLIENT_ID, SolixSession } from "./session";
 import { resolveModel } from "./models";
+import { C2000G2_FIELDS, C2000G2_SETTINGS } from "./models/c2000g2";
+import { buildSettingCommand } from "./settings";
 
 // --- fixtures (SolixBLE tests/const.py) -----------------------------------
 
@@ -158,6 +160,57 @@ describe("session", () => {
     assert.equal(new TextDecoder().decode(params.get(0xa2)!), CLIENT_ID);
     assert.equal(new TextDecoder().decode(params.get(0xa5)!), "GMT0BST,M3.5.0/1,M10.5.0");
     assert.equal(session.state, "negotiating");
+
+    // With session keys in hand, AC-on encodes exactly as SolixBLE's E2E test
+    // (tests/devices/c1000g2.py, c1000g2_ac_on), timestamp included.
+    const acOn = buildSettingCommand(C2000G2_SETTINGS.find((x) => x.id === "ac_output_switch")!, [1]);
+    await session.sendCommand(acOn.cmd, acOn.tags);
+    assert.equal(sent.at(-1), "ff091a0003000f4101cf1b676bb8c648a6f066b90d0c202502c1");
+  });
+});
+
+describe("settings", () => {
+  const spec = (id: string) => C2000G2_SETTINGS.find((x) => x.id === id)!;
+  const enc = (id: string, values: number[], header?: number) => {
+    const c = buildSettingCommand(spec(id), values, { header });
+    return [c.cmd, hex(buildParams(c.tags))];
+  };
+
+  test("matches SolixBLE's C1000 Gen 2 AC/DC switch payloads", () => {
+    assert.deepEqual(enc("ac_output_switch", [1]), ["4101", "a10121a2020101"]);
+    assert.deepEqual(enc("ac_output_switch", [0]), ["4101", "a10121a2020100"]);
+    assert.deepEqual(enc("dc_output_switch", [1]), ["4102", "a10121a2020101"]);
+    assert.deepEqual(enc("dc_output_switch", [0]), ["4102", "a10121a2020100"]);
+  });
+
+  test("encodes ui, sile and var fields and multi-field commands", () => {
+    assert.deepEqual(enc("usage_mode", [1]), ["4090", "a10121a2020101"]);
+    assert.deepEqual(enc("ac_charge_limit", [1200], 0x22), ["4101", "a10122a40302b004"]);
+    assert.deepEqual(enc("ac_output_timeout", [3600]), ["4101", "a10121a30503100e0000"]);
+    assert.deepEqual(enc("soc_limits", [90, 10]), ["4103", "a10121aa02015aab02010a"]);
+    assert.deepEqual(enc("screensaver", [1]), ["4091", "a10121a2020180"]);
+    assert.deepEqual(enc("storm_guard", [3, 1, 1]), ["405e", "a10121a3020103a4020101a5020101"]);
+  });
+
+  test("rejects values outside a field's options or range", () => {
+    assert.throws(() => buildSettingCommand(spec("soc_limits"), [91, 10]));
+    assert.throws(() => buildSettingCommand(spec("ac_charge_limit"), [100]));
+    assert.throws(() => buildSettingCommand(spec("soc_limits"), [90]));
+  });
+
+  test("toggle settings are a single off/on field", () => {
+    for (const s of C2000G2_SETTINGS.filter((x) => x.toggle)) {
+      assert.equal(s.fields.length, 1, s.id);
+      assert.deepEqual(Object.keys(s.fields[0]!.options ?? {}), ["0", "1"], s.id);
+    }
+    assert.ok(spec("display_switch").toggle);
+  });
+
+  test("every setting's state key is a field the C2000 Gen 2 decoder emits", () => {
+    const keys = new Set(C2000G2_FIELDS.flatMap((t) => t.fields.map((f) => f.key)));
+    for (const s of C2000G2_SETTINGS) {
+      for (const f of s.fields) if (f.stateKey) assert.ok(keys.has(f.stateKey), `${s.id}: ${f.stateKey}`);
+    }
   });
 });
 
@@ -248,6 +301,16 @@ describe("device models", () => {
     // Empty accessory slot and the firmware-bugged health byte stay out.
     assert.equal(Object.keys(f).some((k) => k.startsWith("device_1_")), false);
     assert.equal("battery_soh" in f, false);
+    // Settings controls read the raw number behind formatted values ("10 s" -> 10).
+    const decoded = new Map(model.decodeTelemetry("c421", params).map((x) => [x.key, x]));
+    assert.equal(decoded.get("display_timeout_seconds")?.raw, 10);
+    assert.equal(decoded.get("temp_unit_fahrenheit")?.raw, 1);
+    for (const s of C2000G2_SETTINGS) {
+      for (const sf of s.fields) {
+        const live = sf.stateKey ? decoded.get(sf.stateKey) : undefined;
+        if (live) assert.equal(typeof live.raw, "number", `${s.id}: ${sf.stateKey}`);
+      }
+    }
     // Status-page roles still resolve.
     const roles = model.decodeTelemetry("c421", params).map((x) => x.role);
     for (const r of ["battery", "expansion_battery", "input", "output", "output_total", "time_remaining"]) {

@@ -143,7 +143,7 @@ export function decodeTags(spec: readonly TagSpec[], params: Params): TelemetryF
       if (raw === undefined || raw === f.hideWhen) continue;
       fields.push({
         key: f.key, label: f.label, role: f.role ?? "info", group: t.group,
-        value: present(f, raw), ...(f.unit ? { unit: f.unit } : {}),
+        value: present(f, raw), ...(typeof raw === "number" ? { raw } : {}), ...(f.unit ? { unit: f.unit } : {}),
       });
     }
     if (!t.requires || fields.some((x) => x.key === t.requires)) out.push(...fields);

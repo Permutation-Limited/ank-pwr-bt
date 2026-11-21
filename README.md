@@ -18,7 +18,8 @@ you to approve the browser, short-press its power or IoT button.
 
 - **Status** (`#/`): battery level and power in and out, live.
 - **Debug** (`#/debug`): session details, raw telemetry tags, advertisements,
-  the GATT tree and a protocol log.
+  the GATT tree and a protocol log, plus experimental settings controls
+  (C2000 Gen 2) and a raw command sender.
 
 ## Develop
 

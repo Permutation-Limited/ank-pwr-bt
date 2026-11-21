@@ -8,4 +8,7 @@ export { type BluetoothEnvironment, bluetoothEnvironment, onAvailabilityChanged 
 export type { CharacteristicInfo, DescriptorInfo, ServiceInfo } from "./gatt-explorer";
 export { errMsg } from "./emitter";
 export { parseServiceUuid, shortUuid } from "./uuids";
-export { type FieldRole, hex, type TelemetryField } from "../protocol";
+export {
+  type FieldRole, type SettingField, type SettingSpec, type TelemetryField, type TimestampStyle, buildParams, fromHex,
+  hex, parseParams, settingCmd,
+} from "../protocol";

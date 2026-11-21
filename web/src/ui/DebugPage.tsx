@@ -11,6 +11,7 @@ import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Stack from "@mui/material/Stack";
+import Switch from "@mui/material/Switch";
 import { styled } from "@mui/material/styles";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -19,7 +20,10 @@ import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { useState } from "react";
-import { type CharacteristicInfo, type ServiceInfo, type TelemetryField, errMsg, shortUuid } from "../ble";
+import {
+  type CharacteristicInfo, type ServiceInfo, type SettingField, type SettingSpec, type TelemetryField,
+  type TimestampStyle, buildParams, errMsg, fromHex, parseParams, settingCmd, shortUuid,
+} from "../ble";
 import { CardGrid, KeyValue, Mono, Pill, Section, type Tone } from "./common";
 import { describeValue, formatField, toHex } from "./format";
 import { type ConnectOptions, type RawFrame, useAppState, useStore } from "./store";
@@ -31,6 +35,7 @@ export function DebugPage() {
       <Controls />
       <CardGrid>
         <SolixSection />
+        <SettingsSection />
         <TelemetrySection />
         <RawSection />
         <ApiSection />
@@ -128,6 +133,165 @@ function SolixSection() {
     }>
       <KeyValue rows={rows} empty="Not connected" />
     </Section>
+  );
+}
+
+// ------------------------------------------------------------ settings (experimental)
+
+/** A setting's current number from its decoded field ("30 s" -> 30). */
+const rawValue = (f: TelemetryField | undefined) => f?.raw ?? (typeof f?.value === "number" ? f.value : undefined);
+
+const fieldDefault = (f: SettingField) =>
+  f.default ?? (f.options ? Number(Object.keys(f.options)[0]) : f.min ?? 0);
+
+/**
+ * One control per settings command the model knows. Commands come from
+ * public repos and are mostly unproven over BLE: send one, watch the log for
+ * the reply and the telemetry for the change.
+ */
+function SettingsSection() {
+  const store = useStore();
+  const { session, telemetry } = useAppState();
+  const [timestamp, setTimestamp] = useState<TimestampStyle>("fe");
+  const [header, setHeader] = useState(0x21);
+  const specs = store.client.settingSpecs;
+  const ready = session?.state === "authorized";
+  const fields = new Map((telemetry?.fields ?? []).map((f) => [f.key, f]));
+  const groups = new Map<string, SettingSpec[]>();
+  for (const s of specs) groups.set(s.group, [...(groups.get(s.group) ?? []), s]);
+  return (
+    <Section wide title="Settings (experimental)" action={
+      <Stack direction="row" spacing={1}>
+        <TextField select size="small" label="Timestamp" value={timestamp} sx={{ minWidth: 170 }}
+          onChange={(e) => setTimestamp(e.target.value as TimestampStyle)}>
+          <MenuItem value="fe">fe: u32 seconds (SolixBLE)</MenuItem>
+          <MenuItem value="fd">fd: ms string (MQTT V2)</MenuItem>
+          <MenuItem value="none">none</MenuItem>
+        </TextField>
+        <TextField select size="small" label="a1 header" value={header} sx={{ minWidth: 130 }}
+          onChange={(e) => setHeader(Number(e.target.value))}>
+          <MenuItem value={0x21}>21 (BLE)</MenuItem>
+          <MenuItem value={0x22}>22 (MQTT)</MenuItem>
+        </TextField>
+      </Stack>
+    }>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Command definitions come from SolixBLE and anker-solix-api's MQTT map; only the ones marked
+        "proven" have been seen working over Bluetooth. Send one at a time and check the log for the
+        device's reply and the telemetry for the change.
+      </Typography>
+      {specs.length === 0
+        ? <Typography color="text.secondary">{session ? `No settings known for ${session.model.name}` : "Not connected"}</Typography>
+        : (
+          <CardGrid sx={{ gap: 2.5, gridTemplateColumns: "repeat(auto-fill, minmax(min(340px, 100%), 1fr))" }}>
+            {[...groups].map(([group, list]) => (
+              <Box key={group}>
+                <Typography variant="subtitle2" gutterBottom>{group}</Typography>
+                <Stack spacing={1.5}>
+                  {list.map((spec) => (
+                    <SettingControl key={spec.id} spec={spec} fields={fields} disabled={!ready}
+                      send={(values) => store.client.sendSetting(spec, values, { timestamp, header })} />
+                  ))}
+                </Stack>
+              </Box>
+            ))}
+          </CardGrid>
+        )}
+      <RawCommand disabled={!ready} timestamp={timestamp} />
+    </Section>
+  );
+}
+
+function SettingControl({ spec, fields, disabled, send }: {
+  spec: SettingSpec; fields: Map<string, TelemetryField>; disabled: boolean; send(values: number[]): Promise<void>;
+}) {
+  const store = useStore();
+  // Follow telemetry until the user edits a value.
+  const [draft, setDraft] = useState<(number | undefined)[]>([]);
+  const [busy, setBusy] = useState(false);
+  const live = spec.fields.map((f) => (f.stateKey ? fields.get(f.stateKey) : undefined));
+  const values = spec.fields.map((f, i) => draft[i] ?? rawValue(live[i]) ?? fieldDefault(f));
+  const set = (i: number, v: number) => setDraft((d) => { const n = [...d]; n[i] = v; return n; });
+  const submit = async (vals = values) => {
+    setBusy(true);
+    try {
+      await send(vals);
+      setDraft([]);
+    } catch (e) {
+      store.log(`${spec.label}: ${errMsg(e)}`, "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const current = live.map((f) => (f ? formatField(f) : null)).filter(Boolean).join(" · ");
+  return (
+    <Box sx={{ borderLeft: 2, borderColor: spec.verified ? "success.main" : "divider", pl: 1.5 }}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap", mb: 0.75 }}>
+        <Typography sx={{ fontWeight: 600 }}>{spec.label}</Typography>
+        <Mono sx={{ fontSize: 12, color: "text.secondary" }}>
+          {settingCmd(spec.msgtype)} {spec.fields.map((f) => f.tag.toString(16)).join("+")}
+        </Mono>
+        <Pill label={spec.verified ? "proven" : "untested"} tone={spec.verified ? "success" : "default"} />
+        {current && <Typography variant="body2" color="text.secondary">now: {current}</Typography>}
+      </Stack>
+      {spec.toggle ? (
+        // A live action: the switch shows the device's current state and flips it at once.
+        <FormControlLabel label={values[0] ? "on" : "off"} disabled={disabled || busy}
+          control={<Switch checked={values[0] === 1} onChange={(e) => void submit([e.target.checked ? 1 : 0])} />} />
+      ) : (
+      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+        {spec.fields.map((f, i) => f.options
+          ? (
+            <TextField key={f.tag} select size="small" label={f.label} value={values[i]} sx={{ minWidth: 140 }}
+              onChange={(e) => set(i, Number(e.target.value))}>
+              {Object.entries(f.options).map(([v, label]) => <MenuItem key={v} value={Number(v)}>{label}</MenuItem>)}
+              {/* The device may hold a value outside the known options; show it rather than a wrong one. */}
+              {!(values[i]! in f.options) && <MenuItem value={values[i]}>{values[i]} (current)</MenuItem>}
+            </TextField>
+          )
+          : (
+            <TextField key={f.tag} size="small" type="number" label={f.unit ? `${f.label} (${f.unit})` : f.label}
+              value={values[i]} sx={{ width: 150 }} onChange={(e) => set(i, Number(e.target.value))}
+              slotProps={{ htmlInput: { min: f.min, max: f.max, step: f.step ?? 1 } }} />
+          ))}
+        <Button size="small" variant="outlined" disabled={disabled || busy} onClick={() => void submit()}>Send</Button>
+      </Stack>
+      )}
+      {spec.caution && <Typography variant="body2" color="warning.main" sx={{ mt: 0.5 }}>{spec.caution}</Typography>}
+      {spec.note && <Typography variant="caption" color="text.secondary">{spec.note}</Typography>}
+    </Box>
+  );
+}
+
+/** Free-form command: cmd with flags (e.g. 4101) and TLV tags in hex, timestamp appended. */
+function RawCommand({ disabled, timestamp }: { disabled: boolean; timestamp: TimestampStyle }) {
+  const store = useStore();
+  const [cmd, setCmd] = useState("4101");
+  const [tags, setTags] = useState("a10121 a2020101");
+  const send = async () => {
+    try {
+      if (!/^[0-9a-f]{4}$/i.test(cmd)) throw new Error("cmd must be 4 hex digits, e.g. 4101");
+      const parsed = parseParams(fromHex(tags));
+      if (parsed.status !== null) throw new Error("tags must start at a1 or above");
+      const list = [...parsed.params];
+      if (buildParams(list).length !== fromHex(tags).length) throw new Error("tags don't parse as complete TLVs");
+      await store.client.sendCommand(cmd.toLowerCase(), list, timestamp);
+      store.log(`sent raw ${cmd} ${tags}`, "ok");
+    } catch (e) {
+      store.log(`raw command: ${errMsg(e)}`, "err");
+    }
+  };
+  return (
+    <Box sx={{ mt: 3 }}>
+      <Typography variant="subtitle2" gutterBottom>Raw command</Typography>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+        <TextField size="small" label="cmd" value={cmd} onChange={(e) => setCmd(e.target.value.trim())} sx={{ width: 90 }}
+          slotProps={{ input: { sx: { fontFamily: MONO } } }} />
+        <TextField size="small" label="TLV tags (hex, timestamp added)" value={tags} onChange={(e) => setTags(e.target.value)}
+          sx={{ flex: 1, minWidth: 220 }} slotProps={{ input: { sx: { fontFamily: MONO } } }} />
+        <Button size="small" variant="outlined" disabled={disabled} onClick={() => void send()}>Send</Button>
+      </Stack>
+    </Box>
   );
 }
 
