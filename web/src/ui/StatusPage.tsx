@@ -37,7 +37,9 @@ export function StatusPage() {
   const totalIn = num(fields.find((f) => f.role === "input_total")) ?? sum(inputs);
   const totalOut = num(fields.find((f) => f.role === "output_total")) ?? sum(outputs);
   const packs = [battery, ...fields.filter((f) => f.role === "expansion_battery")];
-  const temp = fields.find((f) => f.role === "temperature");
+  // Each pack's temperature: the main unit's, then expansion packs' in order.
+  const temps = [fields.find((f) => f.role === "temperature"), ...fields.filter((f) => f.role === "expansion_temperature")];
+  const tempText = (f?: TelemetryField) => (f ? `${f.value}${f.unit ?? ""}` : undefined);
   // Output ports the model can switch, keyed by the port's power field.
   const byKey = new Map(fields.map((f) => [f.key, f]));
   const switches = new Map(store.client.settingSpecs.filter((s) => s.output).map((spec): [string, PortSwitch] => [
@@ -65,7 +67,7 @@ export function StatusPage() {
           {connection.device?.name ?? session?.model.name ?? "Power station"}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          {[session?.model.name, temp && `${temp.value}${temp.unit ?? ""}`, `updated ${telemetry.at.toLocaleTimeString()}`]
+          {[session?.model.name, `updated ${telemetry.at.toLocaleTimeString()}`]
             .filter(Boolean).join(" · ")}
         </Typography>
       </Stack>
@@ -77,7 +79,7 @@ export function StatusPage() {
         }}>
           <Stack direction="row" spacing={{ xs: 1.75, sm: 3 }} sx={{ alignItems: "center" }}>
             {packs.map((f, i) => (
-              <Gauge key={f.key} percent={num(f) ?? 0} small={i > 0}
+              <Gauge key={f.key} percent={num(f) ?? 0} small={i > 0} temperature={tempText(temps[i])}
                 label={packs.length === 1 ? "battery" : f.role === "battery" ? "main" : "expansion"} />
             ))}
           </Stack>

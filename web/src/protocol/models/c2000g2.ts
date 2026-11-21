@@ -16,7 +16,7 @@
 
 import { type TagSpec, decodeTags } from "../fieldmap";
 import { GEN2_ON_AUTHORIZED, GEN2_TELEMETRY_CMDS } from "./gen2";
-import type { DeviceModel, SettingSpec } from "./types";
+import type { DeviceModel, SettingSpec, TelemetryField } from "./types";
 
 const OFF_ON = { 0: "off", 1: "on" };
 const PORT_STATUS = { 0: "inactive", 1: "discharging", 2: "charging" };
@@ -95,7 +95,7 @@ export const C2000G2_FIELDS: readonly TagSpec[] = [
       { key: "exp_1_sn", label: "Serial number", type: "str", hideWhen: "" },
       { key: "exp_1_id", label: "Slot", type: "ui" },
       { key: "exp_1_version", label: "Firmware", type: "version" },
-      { key: "exp_1_temperature", label: "Temperature", type: "ui", signed: true, unit: "°C" },
+      { key: "exp_1_temperature", label: "Temperature", type: "ui", signed: true, unit: "°C", role: "expansion_temperature" },
       { key: "exp_1_status", label: "Status", type: "ui", values: { 0: "idle", 1: "discharging", 2: "charging" } },
       { key: "exp_1_soc", label: "Expansion battery", type: "ui", unit: "%", role: "expansion_battery" },
       // Skips the health byte (firmware bug, see top) and the constant blink status.
@@ -298,6 +298,17 @@ export const C2000G2_SETTINGS: readonly SettingSpec[] = [
       mask: 0x80, options: SWITCH }] },
 ];
 
+/**
+ * The station always reports temperatures in °C; its °C/°F setting
+ * (a4.19) only picks the unit its screen and the Anker app show. Follow it:
+ * convert °C fields to whole °F when it's set to °F. ``raw`` keeps the °C.
+ */
+export function inStationUnit(fields: TelemetryField[]): TelemetryField[] {
+  if (fields.find((f) => f.key === "temp_unit_fahrenheit")?.raw !== 1) return fields;
+  return fields.map((f) => (f.unit === "°C" && typeof f.value === "number"
+    ? { ...f, value: Math.round((f.value * 9) / 5 + 32), unit: "°F" } : f));
+}
+
 const NAMES = [/^SOLIX C2000X? Gen 2/];
 const PART_NUMBERS = ["A1783", "A1785"];
 
@@ -310,5 +321,5 @@ export const c2000g2: DeviceModel = {
   onAuthorized: GEN2_ON_AUTHORIZED,
   settings: C2000G2_SETTINGS,
   partNumber: (p) => decodeTags([C2000G2_FIELDS[0]!], p).find((f) => f.key === "device_pn")?.value as string | undefined,
-  decodeTelemetry: (cmd, p) => (GEN2_TELEMETRY_CMDS.includes(cmd) ? decodeTags(C2000G2_FIELDS, p) : []),
+  decodeTelemetry: (cmd, p) => (GEN2_TELEMETRY_CMDS.includes(cmd) ? inStationUnit(decodeTags(C2000G2_FIELDS, p)) : []),
 };

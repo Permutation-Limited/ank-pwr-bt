@@ -22,11 +22,14 @@ export interface DeviceHints {
  * - input / output: power on one port (W)
  * - input_total / output_total: power summed across ports (W)
  * - time_remaining: hours until empty (discharging) or full (charging)
- * - temperature, port, setting, info: everything else
+ * - temperature: the main unit's temperature
+ * - expansion_temperature: an expansion pack's temperature, in the same
+ *   order as the expansion_battery fields
+ * - port, setting, info: everything else
  */
 export type FieldRole =
   | "battery" | "expansion_battery" | "input" | "output" | "input_total" | "output_total" | "time_remaining"
-  | "temperature" | "port" | "setting" | "info";
+  | "temperature" | "expansion_temperature" | "port" | "setting" | "info";
 
 /** One decoded telemetry value, ready to display. */
 export interface TelemetryField {

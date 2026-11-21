@@ -289,10 +289,11 @@ describe("device models", () => {
     const expected = {
       device_sn: "AXXXXXXXX00000001", device_pn: "A1783", sw_version: "1.2.1.6", model_variant: "1800 W AC input (0)",
       working_status: "idle (0)", ac_input_limit_max: 1800, mtu_size: 204, silent_charge_power: 600,
-      temperature: 24, main_battery_soc: 100, remaining_time_hours: 6.7, output_power_total: 32,
+      // Set to °F (a4.19 = 1): the reported 24 °C and 20 °C read as °F.
+      temperature: 75, main_battery_soc: 100, remaining_time_hours: 6.7, output_power_total: 32,
       dc_input_power_total: 102, dc_input_power: 102, ac_output_power: 31, ac_output_power_switch: "on (1)",
       usbc_1_power: 1, usbc_1_status: "discharging (1)",
-      exp_1_sn: "APCXXXXXX00000002", exp_1_version: "1.9.3.3", exp_1_temperature: 20, exp_1_soc: 92,
+      exp_1_sn: "APCXXXXXX00000002", exp_1_version: "1.9.3.3", exp_1_temperature: 68, exp_1_soc: 92,
       exp_1_status: "discharging (1)", exp_1_connection_status: "fitted (1)", exp_1_type: "A1783_2kWh",
       max_soc: 100, min_soc: 1, ac_input_limit: 800, ac_frequency: 60, device_timeout_minutes: 1440,
       display_timeout_seconds: "10 s", temp_unit_fahrenheit: "°F (1)",
@@ -318,9 +319,19 @@ describe("device models", () => {
         if (live) assert.equal(typeof live.raw, "number", `${s.id}: ${sf.stateKey}`);
       }
     }
+    // Temperatures follow the station's unit; raw keeps °C. In °C nothing is converted.
+    assert.deepEqual([decoded.get("temperature")?.unit, decoded.get("temperature")?.raw], ["°F", 24]);
+    const celsius = new Map(params);
+    const a4 = new Uint8Array(celsius.get(0xa4)!);
+    a4[1 + 19] = 0; // type byte + offset 19
+    celsius.set(0xa4, a4);
+    const c = new Map(model.decodeTelemetry("c421", celsius).map((x) => [x.key, x]));
+    assert.deepEqual([c.get("temperature")?.value, c.get("temperature")?.unit], [24, "°C"]);
+    assert.equal(c.get("exp_1_temperature")?.value, 20);
     // Status-page roles still resolve.
     const roles = model.decodeTelemetry("c421", params).map((x) => x.role);
-    for (const r of ["battery", "expansion_battery", "input", "output", "output_total", "time_remaining"]) {
+    for (const r of ["battery", "expansion_battery", "input", "output", "output_total", "time_remaining",
+      "temperature", "expansion_temperature"]) {
       assert.ok(roles.includes(r as never), r);
     }
   });
